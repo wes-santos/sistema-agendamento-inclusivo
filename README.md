@@ -1,2 +1,2 @@
-# sistema-agendamento-inclusivo
+# Sistema de Agendamento Inclusivo
 MVP de agendamento unificado para atendimentos especializados em escolas inclusivas — fluxo em 3 passos, e-mail de confirmação/lembrete, bloqueio de conflitos e histórico.
