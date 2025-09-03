@@ -1,0 +1,38 @@
+# ========= Dev Image =========
+FROM python:3.13-slim
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1 \
+    POETRY_VERSION=2.1.4 \
+    POETRY_VIRTUALENVS_IN_PROJECT=true \
+    POETRY_NO_INTERACTION=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# deps úteis p/ dev (psycopg, git, tzdata p/ BR)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential git curl libpq-dev tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# pipx + poetry
+RUN pip install --no-cache-dir pipx && pipx install "poetry==${POETRY_VERSION}"
+
+ENV PATH="/root/.local/bin:${PATH}"
+
+WORKDIR /app
+
+# cache de deps: só pyproject/lock
+COPY pyproject.toml poetry.lock* ./
+RUN /root/.local/bin/poetry install --no-root
+
+RUN ln -s /root/.local/bin/poetry /usr/local/bin/poetry
+
+# código (montado por volume no compose, mas copiamos para fallback)
+COPY app ./app
+
+# expõe pra uvicorn
+EXPOSE 8000
+
+# comando default (pode ser sobrescrito no compose)
+CMD ["/root/.local/bin/poetry", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+
