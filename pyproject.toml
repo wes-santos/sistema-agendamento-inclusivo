@@ -1,0 +1,26 @@
+[project]
+name = "sistema-agendamento-inclusivo"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Weslley Santos",email = "weslleyalmerindo2@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic-settings (>=2.10.1,<3.0.0)",
+    "fastapi (>=0.116.1,<0.117.0)",
+    "uvicorn (>=0.35.0,<0.36.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.12.11"
+black = "^25.1.0"
+isort = "^6.0.1"
+pre-commit = "^4.3.0"
+

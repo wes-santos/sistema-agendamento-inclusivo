@@ -1,0 +1,29 @@
+# python
+__pycache__/
+*.pyc
+*.pyo
+
+# venvs locais
+.venv/
+.env
+.env.*
+!.env.example
+
+# vcs/ide
+.git/
+.gitignore
+.idea/
+.vscode/
+
+# cache/tools
+dist/
+build/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.coverage
+
+# os
+.DS_Store
+Thumbs.db
+
