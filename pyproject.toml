@@ -21,6 +21,7 @@ passlib = {extras = ["bcrypt"], version = "^1.7.0"}
 pyjwt = "^2.9.0"
 email-validator = "^2.2.0"
 python-multipart = "^0.0.9"
+structlog = "^25.4.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.6.0"
