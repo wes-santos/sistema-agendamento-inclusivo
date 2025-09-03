@@ -10,8 +10,8 @@ services:
       - "8000:8000"
     volumes:
       - ./app:/app/app:rw,delegated
-      - ./pyproject.toml:/app/pyproject.toml:ro
-      - ./poetry.lock:/app/poetry.lock:ro
+      - ./pyproject.toml:/app/pyproject.toml:rw
+      - ./poetry.lock:/app/poetry.lock:rw
       - ./.venv:/app/.venv
 
     depends_on:
