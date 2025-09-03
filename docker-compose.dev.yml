@@ -1,0 +1,42 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: agenda_api_dev
+    command: bash -lc "poetry install --no-root && poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    env_file: .env.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app:rw,delegated
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./poetry.lock:/app/poetry.lock:ro
+      - ./.venv:/app/.venv
+
+    depends_on:
+      - db
+      - mailhog
+
+  db:
+    image: postgres:16
+    container_name: agenda_db_dev
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: agenda_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+
+  mailhog:
+    image: mailhog/mailhog
+    container_name: agenda_mailhog_dev
+    ports:
+      - "8025:8025"   # UI web
+      - "1025:1025"   # SMTP
+
+volumes:
+  pgdata_dev:
+
