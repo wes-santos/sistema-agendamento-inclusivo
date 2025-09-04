@@ -1,16 +1,22 @@
 from __future__ import annotations
+
 import time
-from typing import Callable
+from collections.abc import Callable
+
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
-from app.core.logging import get_logger, set_request_id 
+
+from app.core.logging import get_logger, set_request_id
+
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         incoming = request.headers.get("X-Request-ID")
         rid = set_request_id(incoming)
 
-        log = get_logger().bind(request_id=rid, path=request.url.path, method=request.method)
+        log = get_logger().bind(
+            request_id=rid, path=request.url.path, method=request.method
+        )
         log.info("request.start")
 
         started = time.perf_counter()
@@ -24,5 +30,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         response.headers["X-Request-ID"] = rid
 
-        log.bind(status_code=response.status_code, duration_ms=round(duration_ms, 2)).info("request.end")
+        log.bind(
+            status_code=response.status_code, duration_ms=round(duration_ms, 2)
+        ).info("request.end")
         return response

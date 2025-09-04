@@ -1,7 +1,8 @@
 # app/db/base.py
 from __future__ import annotations
-from sqlalchemy.orm import DeclarativeBase, declared_attr
+
 from sqlalchemy import MetaData
+from sqlalchemy.orm import DeclarativeBase, declared_attr
 
 # Evita diffs chatos em autogenerate
 NAMING_CONVENTION = {
@@ -13,6 +14,7 @@ NAMING_CONVENTION = {
 }
 metadata_obj = MetaData(naming_convention=NAMING_CONVENTION)
 
+
 class Base(DeclarativeBase):
     metadata = metadata_obj
 
@@ -20,6 +22,7 @@ class Base(DeclarativeBase):
     @declared_attr.directive
     def __tablename__(cls) -> str:  # type: ignore[override]
         import re
+
         name = cls.__name__
         s1 = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)
         return re.sub("([a-z0-9])([A-Z])", r"\1_\2", s1).lower()

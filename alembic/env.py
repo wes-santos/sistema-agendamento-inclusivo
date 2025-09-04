@@ -1,7 +1,9 @@
 from __future__ import annotations
-import os
+
 from logging.config import fileConfig
+
 from sqlalchemy import engine_from_config, pool
+
 from alembic import context
 
 # Carrega settings do app (inclui .env)
@@ -21,17 +23,19 @@ if config.config_file_name is not None:
 # Target metadata para autogenerate
 target_metadata = Base.metadata
 
+
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
-        compare_type=True,      # detecta mudanças de tipo
+        compare_type=True,  # detecta mudanças de tipo
         compare_server_default=True,
     )
     with context.begin_transaction():
         context.run_migrations()
+
 
 def run_migrations_online() -> None:
     connectable = engine_from_config(
@@ -49,6 +53,7 @@ def run_migrations_online() -> None:
         )
         with context.begin_transaction():
             context.run_migrations()
+
 
 if context.is_offline_mode():
     run_migrations_offline()
