@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile.dev
     container_name: agenda_api_dev
-    command: bash -lc "poetry install --no-root && poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    command: bash -lc "/root/.local/bin/poetry install --with dev --no-root && /root/.local/bin/poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-access-log" 
     env_file: .env.dev
     ports:
       - "8000:8000"
@@ -12,7 +12,8 @@ services:
       - ./app:/app/app:rw,delegated
       - ./pyproject.toml:/app/pyproject.toml:rw
       - ./poetry.lock:/app/poetry.lock:rw
-      - ./.venv:/app/.venv
+      - ./alembic.ini:/app/alembic.ini:rw
+      - ./alembic:/app/alembic:rw
 
     depends_on:
       - db
@@ -29,6 +30,22 @@ services:
       - "5432:5432"
     volumes:
       - pgdata_dev:/var/lib/postgresql/data
+  
+  pgadmin:
+    image: dpage/pgadmin4:8
+    container_name: agenda_pgadmin_dev
+    depends_on:
+      - db
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@local.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_ENHANCED_COOKIE_PROTECTION: "True"
+      PGADMIN_CONFIG_CONSOLE_LOG_LEVEL: "10"   # DEBUG no dev
+    ports:
+      - "5050:80"          # acesso em http://localhost:5050
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./servers.json:/pgadmin4/servers.json:ro
 
   mailhog:
     image: mailhog/mailhog
@@ -39,4 +56,4 @@ services:
 
 volumes:
   pgdata_dev:
-
+  pgadmin_data:
