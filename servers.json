@@ -1,0 +1,14 @@
+{
+    "Servers": {
+        "1": {
+            "Name": "Local DB (docker)",
+            "Group": "Servers",
+            "Host": "db",
+            "Port": 5432,
+            "MaintenanceDB": "agenda_dev",
+            "Username": "app",
+            "SSLMode": "prefer",
+            "ConnectNow": true
+        }
+    }
+}
