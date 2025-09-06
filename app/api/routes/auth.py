@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
+from httpcore import request
 from sqlalchemy.orm import Session
 
+from app.audit.helpers import record_audit
 from app.core.security import (
     create_access_token,
     create_refresh_token,
@@ -86,7 +88,9 @@ def register_user(payload: UserCreate, db: Session = Depends(get_db)):  # noqa: 
 
 
 @router.post("/login", response_model=LoginOut)
-def login(data: LoginIn, response: Response, db: Session = Depends(get_db)):  # noqa: B008
+def login(
+    data: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)
+):
     user: User | None = db.query(User).filter(User.email == data.email).first()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(
@@ -99,6 +103,16 @@ def login(data: LoginIn, response: Response, db: Session = Depends(get_db)):  # 
     refresh = create_refresh_token(str(user.id))
 
     _set_auth_cookies(response, access, refresh)
+
+    record_audit(
+        db,
+        request=request,
+        user_id=user.id,
+        action="LOGIN",
+        entity="user",
+        entity_id=user.id,
+        autocommit=True,
+    )
 
     # If using cookies only, you can omit returning the tokens
     return LoginOut(
@@ -113,13 +127,24 @@ def login(data: LoginIn, response: Response, db: Session = Depends(get_db)):  # 
     name="logout",
     status_code=status.HTTP_204_NO_CONTENT,
 )
-def logout(request: Request):
+def logout(request: Request, db: Session = Depends(get_db)):
     next_url = request.query_params.get("next") or "/ui/login"
     resp = RedirectResponse(url=next_url, status_code=status.HTTP_303_SEE_OTHER)
 
     # limpa cookies de auth
     secure = request.url.scheme == "https"
     _delete_auth_cookies(resp, secure=secure)
+
+    current_user_id = request.session.get("user_id") or None
+    record_audit(
+        db,
+        request=request,
+        user_id=current_user_id,
+        action="LOGOUT",
+        entity="user",
+        entity_id=current_user_id,
+        autocommit=True,
+    )
 
     # zera a sessão, mas deixa um flash para feedback
     try:
