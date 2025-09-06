@@ -1,0 +1,9 @@
+{# expects: toast = {"type": "ok|warn|error|info", "message": "..."} #}
+{% if toast and toast.message %}
+  <div class="toast {{ toast.type or '' }}" role="status" aria-live="polite">
+    <div style="display:flex;justify-content:space-between;gap:.75rem;align-items:start">
+      <div>{{ toast.message }}</div>
+      <button class="btn" data-dialog-close aria-label="Fechar">✕</button>
+    </div>
+  </div>
+{% endif %}

@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% from '_macros/forms.html' import input_field, select_field, status_badge %}
+
+{% block title %}Meus agendamentos · Família{% endblock %}
+
+{% block content %}
+  <h1>Meus agendamentos</h1>
+
+  <form method="get" class="card mt-4" aria-labelledby="filtros-heading">
+    <h2 id="filtros-heading" class="sr-only">Filtros</h2>
+    <div class="grid grid-3">
+      {{ select_field('range', 'Período', [('upcoming','Próximos'),('past','Passados'),('all','Todos')], value=request.query_params.get('range','upcoming')) }}
+      {{ select_field('status', 'Status', [('','Todos'),('SCHEDULED','Agendado'),('CONFIRMED','Confirmado'),('DONE','Concluído'),('CANCELLED','Cancelado')], value=request.query_params.get('status')) }}
+      {{ input_field('q', 'Buscar (serviço/local)', value=request.query_params.get('q',''), attrs={'placeholder':'Ex.: fono, sala 2'}) }}
+    </div>
+    <div class="mt-4"><button class="btn primary" type="submit">Aplicar</button></div>
+  </form>
+
+  {% if items and items|length %}
+    <div class="card mt-4" role="region" aria-label="Lista de agendamentos">
+      <table>
+        <caption class="sr-only">Agendamentos</caption>
+        <thead>
+          <tr>
+            <th scope="col">Data</th>
+            <th scope="col">Serviço</th>
+            <th scope="col">Profissional</th>
+            <th scope="col">Local</th>
+            <th scope="col">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for it in items %}
+            <tr>
+              <td>{{ it.start_at_local.strftime('%d/%m/%Y %H:%M') if it.start_at_local else it.start_at_utc.strftime('%d/%m/%Y %H:%M UTC') }}</td>
+              <td>{{ it.service }}</td>
+              <td>{{ it.professional_name or ('#' ~ it.professional_id) }}</td>
+              <td>{{ it.location or '—' }}</td>
+              <td>{{ status_badge(it.status) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="card mt-4" role="status" aria-live="polite">Nenhum agendamento encontrado.</div>
+  {% endif %}
+{% endblock %}

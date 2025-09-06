@@ -1,0 +1,4 @@
+{% set flash_msg = request.session.pop('flash', None) %}
+{% if flash_msg %}
+  <div class="card" role="status" aria-live="polite">{{ flash_msg }}</div>
+{% endif %}

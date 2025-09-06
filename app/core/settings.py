@@ -31,13 +31,13 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: str = "localhost,127.0.0.1"
 
     # If True, login will also set HttpOnly cookies (works with frontends that avoid localStorage)  # noqa: E501
-    USE_COOKIE_AUTH: bool = False
+    USE_COOKIE_AUTH: bool = True
 
     # Only set a domain in production (e.g., ".yourdomain.com"). Leave None in dev.
     COOKIE_DOMAIN: str | None = None
 
     # In prod, keep cookies secure-only
-    SECURE_COOKIES: bool = True
+    SECURE_COOKIES: bool = False
 
     model_config = SettingsConfigDict(env_file=".env.dev", env_file_encoding="utf-8")
 

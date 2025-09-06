@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <title>{% block title %}Sistema de Agendamento{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
+  <script src="{{ url_for('static', path='login.js') }}" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <a href="#main" class="skip-link">Pular para o conteúdo principal</a>
+
+  <header role="banner" class="site-header">
+    <nav class="navbar container" aria-label="Principal">
+      <ul class="nav">
+        <li><a class="nav-link" href="/" {% if request and request.url.path=='/' %}aria-current="page"{% endif %}>Início</a></li>
+        {% if current_user and current_user.role == Role.FAMILY %}
+        <li><a class="nav-link" href="/ui/family/appointments" {% if request and request.url.path.startswith('/ui/family') %}aria-current="page"{% endif %}>Família</a></li>
+        {% endif %}
+        {% if current_user and current_user.role == Role.PROFESSIONAL %}
+        <li><a class="nav-link" href="/ui/professional/week" {% if request and request.url.path.startswith('/ui/professional') %}aria-current="page"{% endif %}>Especialista</a></li>
+        {% endif %}
+        {% if current_user and current_user.role == Role.COORDINATION %}
+        <li><a class="nav-link" href="/ui/coordination/overview" {% if request and request.url.path.startswith('/ui/coordination') %}aria-current="page"{% endif %}>Coordenação</a></li>
+        {% endif %}
+      </ul>
+
+      <div class="header-spacer"></div>
+
+      {% if current_user %}
+        <a class="btn small" href="/auth/logout?next=/ui/login">Sair</a>
+      {% else %}
+        <a class="btn small primary" href="/ui/login" role="button">Entrar</a>
+      {% endif %}
+    </nav>
+  </header>
+
+
+  <main id="main" tabindex="-1" class="container" role="main">
+    {% include '_partials/flash.html' %}
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="container" role="contentinfo">
+    <div class="card mt-6">
+      <p><small>© {{ now().year }} Sistema de Agendamento Inclusivo</small></p>
+    </div>
+  </footer>
+  <script>
+    // A11y: dialog open/close + focus return
+    (function(){
+      const openers = document.querySelectorAll('[data-dialog-open]');
+      const closers = document.querySelectorAll('[data-dialog-close]');
+      const lastFocus = new Map();
+      function trapFocus(dialog){
+        function handler(e){
+          if(!dialog.open) return;
+          if(e.key === 'Escape'){ dialog.close(); }
+          if(e.key !== 'Tab') return;
+          const f = dialog.querySelectorAll('[href], button, input, select, textarea, [tabindex]:not([tabindex="-1"])');
+          const foc = Array.from(f).filter(el => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden'));
+          if(!foc.length) return;
+          const first = foc[0], last = foc[foc.length-1];
+          if(e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+          else if(!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
+        }
+        dialog.addEventListener('keydown', handler);
+      }
+      openers.forEach(btn => {
+        const id = btn.getAttribute('data-dialog-open');
+        const dlg = document.getElementById(id);
+        if(!dlg) return;
+        trapFocus(dlg);
+        btn.addEventListener('click', () => {
+          lastFocus.set(dlg, document.activeElement);
+          if(typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open','');
+          const first = dlg.querySelector('[autofocus]') || dlg.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+          if(first) first.focus();
+        });
+      });
+      closers.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const dlg = btn.closest('dialog,[role="dialog"]');
+          if(!dlg) return;
+          if(typeof dlg.close === 'function') dlg.close(); else dlg.removeAttribute('open');
+          const prev = lastFocus.get(dlg); if(prev) prev.focus();
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

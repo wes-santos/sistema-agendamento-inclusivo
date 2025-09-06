@@ -37,3 +37,4 @@ class User(Base):
         onupdate=lambda: dt.datetime.now(tz=dt.UTC),
         nullable=False,
     )
+

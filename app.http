@@ -82,3 +82,42 @@ Authorization: Bearer <ACCESS_TOKEN>
 ### Refresh (bearer mode — manual paste)
 POST {{baseUrl}}/auth/refresh
 Authorization: Bearer <REFRESH_TOKEN>
+
+### Dashboard Family: List My Appointments
+
+GET {{baseUrl}}/dashboard/family/appointments?range=upcoming&page=1&page_size=10
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### 
+GET {{baseUrl}}/dashboard/family/appointments?range=past&status=DONE
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+###
+GET {{baseUrl}}/dashboard/family/appointments?date_from=2025-09-01T00:00:00Z&date_to=2025-09-30T23:59:59Z&q=fono
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### Professional Dashboard: My Schedule
+### Semana atual (TZ São Paulo)
+GET {{baseUrl}}/dashboard/professional/schedule/week
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### Semana de 2025-09-08 (segunda→domingo)
+GET {{baseUrl}}/dashboard/professional/schedule/week?week_start=2025-09-08
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### Filtrar apenas CONFIRMED/DONE
+GET {{baseUrl}}/dashboard/professional/schedule/week?statuses=CONFIRMED&statuses=DONE
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### Coordination Dashboard: Overview
+### Semana atual (padrão):
+GET {{baseUrl}}/dashboard/coordination/overview
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### Semana que contém 2025-09-08 (seg→dom):
+GET {{baseUrl}}/dashboard/coordination/overview?week_start=2025-09-08
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### Janela arbitrária (ex.: 2025-09-01 até 2025-09-15):
+GET {{baseUrl}}/dashboard/coordination/overview?date_from=2025-09-01&date_to=2025-09-15
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}

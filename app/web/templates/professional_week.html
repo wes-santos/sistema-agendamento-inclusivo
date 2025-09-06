@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block title %}Minha agenda (semana) · Especialista{% endblock %}
+
+{% block content %}
+  <h1>Minha agenda (semana)</h1>
+  <p class="mt-2" style="color:var(--muted)">Mostrando de {{ summary.week_start_local.strftime('%d/%m') }} até {{ summary.week_end_local.strftime('%d/%m') }}.</p>
+
+  <div class="grid grid-3 mt-4">
+    {% for day in days %}
+      <section class="card" aria-labelledby="day-{{ loop.index }}-title">
+        <h2 id="day-{{ loop.index }}-title">{{ day.date_local.strftime('%A, %d/%m')|capitalize }}</h2>
+        {% if day['items'] %}
+          <ul>
+            {% for it in day['items'] %}
+              <li class="mt-2">
+                <div><strong>{{ it.start_at_local.strftime('%H:%M') }}–{{ it.end_at_local.strftime('%H:%M') }}</strong> — {{ it.service }}</div>
+                <div style="color:var(--muted)">Família: {{ it.family_name or ('#' ~ it.family_id) }} · Local: {{ it.location or '—' }}</div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="mt-2" style="color:var(--muted)">Sem eventos.</p>
+        {% endif %}
+      </section>
+    {% endfor %}
+  </div>
+{% endblock %}
