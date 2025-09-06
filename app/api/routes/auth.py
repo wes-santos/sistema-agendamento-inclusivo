@@ -12,8 +12,8 @@ from app.core.security import (
     verify_password,
 )
 from app.core.settings import settings
-from app.deps import get_current_user, get_db
-from app.models.user import User
+from app.deps import get_current_user, get_db, require_roles
+from app.models.user import Role, User
 from app.schemas.auth import LoginIn, LoginOut
 from app.schemas.user import UserCreate, UserOut
 
@@ -150,3 +150,24 @@ def refresh(request: Request, response: Response, db: Session = Depends(get_db))
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_current_user)):  # noqa: B008
     return user
+
+
+@router.get("/only-coordination")
+def only_coordination(
+    user: User = Depends(require_roles(Role.COORDINATION)),
+):
+    return {"ok": True, "user_role": user.role}
+
+
+@router.get("/only-professional")
+def only_professional(
+    user: User = Depends(require_roles(Role.PROFESSIONAL)),
+):
+    return {"ok": True, "user_role": user.role}
+
+
+@router.get("/only-family")
+def only_family(
+    user: User = Depends(require_roles(Role.FAMILY)),
+):
+    return {"ok": True, "user_role": user.role}

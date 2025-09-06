@@ -62,11 +62,15 @@ POST {{baseUrl}}/auth/logout
 # ---- Optional protected routes (only if your app includes them) ----
 
 ### Protected: FAMILY only
-GET {{baseUrl}}/protected/for-family
+GET {{baseUrl}}/auth/only-family
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
-### Protected: PROFESSIONAL or COORDINATION
-GET {{baseUrl}}/protected/for-professionals-and-coordination
+### Protected: PROFESSIONAL
+GET {{baseUrl}}/auth/only-professional
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### Protected: COORDINATION
+GET {{baseUrl}}/auth/only-coordination
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
 # ---- Manual-bearer fallbacks (paste token if your server doesn't return tokens in cookie mode) ----
