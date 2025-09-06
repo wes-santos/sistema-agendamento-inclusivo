@@ -39,7 +39,12 @@ class Settings(BaseSettings):
     # In prod, keep cookies secure-only
     SECURE_COOKIES: bool = False
 
-    model_config = SettingsConfigDict(env_file=".env.dev", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(
+        env_file=".env.dev",
+        env_file_encoding="utf-8",
+        ser_json_timedelta="iso8601",
+        ser_json_tz="utc",
+    )
 
 
 # cria instância global
