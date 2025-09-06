@@ -28,7 +28,7 @@
 
 ## Detalhes de Implementação
 
-* **SQLAlchemy**: use `DateTime(timezone=True)`; colunas: `appointments.starts_at_utc`, `ends_at_utc`, `users.created_at_utc`, `audit_logs.timestamp_utc`.
+* **SQLAlchemy**: use `DateTime(timezone=True)`; colunas: `appointments.starts_at`, `ends_at`, `users.created_at`, `audit_logs.timestamp_utc`.
 * **Pydantic/Serialização**:
 
   * Em modelos de resposta, priorize `UTC ISO‑8601` (ex.: `2025-09-10T17:00:00Z`).
