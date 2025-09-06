@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block title %}Entrar · Sistema de Agendamento{% endblock %}
+
+{% block content %}
+  <section class="card" aria-labelledby="login-title">
+    <h1 id="login-title">Entrar</h1>
+
+    <form id="loginForm" aria-describedby="login_hint" novalidate>
+        <label for="email">E-mail</label><br />
+        <input id="email" name="email" type="email" required autocomplete="username"><br />
+        <label for="password" class="mt-4">Senha</label><br />
+        <input id="password" name="password" type="password" required autocomplete="current-password"><br />
+        <p id="login_hint" class="mt-2" style="color:var(--muted)">Cookies HttpOnly serão definidos ao entrar.</p>
+        <button class="btn primary mt-4" type="submit">Entrar</button>
+    </form>
+  </section>
+{% endblock %}

@@ -1,0 +1,71 @@
+{% macro input_field(name, label, type="text", value="", required=False, hint=None, errors=None, attrs={}) -%}
+  {%- set id = attrs.get('id', 'id_' ~ name) -%}
+  {%- set hint_id = id ~ '_hint' -%}
+  {%- set err_id = id ~ '_error' -%}
+  {%- set describedby = [] -%}
+  {%- if hint %}
+    {%- do describedby.append(hint_id) -%}
+  {%- endif -%}
+  {%- if errors %}{%- do describedby.append(err_id) -%}{%- endif -%}
+  <div class="mt-4">
+    <label for="{{ id }}">{{ label }}{% if required %} <span aria-hidden="true">*</span><span class="sr-only"> (obrigatório)</span>{% endif %}</label>
+    <input
+      type="{{ type }}"
+      id="{{ id }}"
+      name="{{ name }}"
+      value="{{ value|e }}"
+      {% if required %}required aria-required="true"{% endif %}
+      {% if describedby %}aria-describedby="{{ describedby|join(' ') }}"{% endif %}
+      {% if errors %}aria-invalid="true"{% endif %}
+      class="mt-2"
+      {% for k,v in attrs.items() if k!='id' %} {{k}}="{{v}}"{% endfor %}
+    />
+    {% if hint %}
+      <div id="{{ hint_id }}" class="mt-2" style="color:var(--muted)">{{ hint }}</div>
+    {% endif %}
+    {% if errors %}
+      <div id="{{ err_id }}" class="mt-2" role="alert" style="color:var(--error)">
+        {% if errors is string %}{{ errors }}{% else %}<ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro select_field(name, label, options, value=None, required=False, hint=None, errors=None, attrs={}) -%}
+  {%- set id = attrs.get('id', 'id_' ~ name) -%}
+  {%- set hint_id = id ~ '_hint' -%}
+  {%- set err_id = id ~ '_error' -%}
+  {%- set describedby = [] -%}
+  {%- if hint %}{%- do describedby.append(hint_id) -%}{%- endif -%}
+  {%- if errors %}{%- do describedby.append(err_id) -%}{%- endif -%}
+  <div class="mt-4">
+    <label for="{{ id }}">{{ label }}{% if required %} <span aria-hidden="true">*</span><span class="sr-only"> (obrigatório)</span>{% endif %}</label>
+    <select id="{{ id }}" name="{{ name }}"
+      {% if required %}required aria-required="true"{% endif %}
+      {% if describedby %}aria-describedby="{{ describedby|join(' ') }}"{% endif %}
+      {% if errors %}aria-invalid="true"{% endif %}
+      class="mt-2"
+      {% for k,v in attrs.items() if k!='id' %} {{k}}="{{v}}"{% endfor %}
+    >
+      {% for opt_value, opt_label in options %}
+        <option value="{{ opt_value }}" {% if value==opt_value %}selected{% endif %}>{{ opt_label }}</option>
+      {% endfor %}
+    </select>
+    {% if hint %}<div id="{{ hint_id }}" class="mt-2" style="color:var(--muted)">{{ hint }}</div>{% endif %}
+    {% if errors %}
+      <div id="{{ err_id }}" class="mt-2" role="alert" style="color:var(--error)">
+        {% if errors is string %}{{ errors }}{% else %}<ul>{% for e in errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+  {%- set cls = 'badge' -%}
+  {%- if status == 'CONFIRMED' %}{%- set cls = cls ~ ' ok' -%}
+  {%- elif status == 'CANCELLED' %}{%- set cls = cls ~ ' error' -%}
+  {%- elif status == 'SCHEDULED' %}{%- set cls = cls ~ '' -%}
+  {%- elif status == 'DONE' %}{%- set cls = cls ~ ' ok' -%}
+  {%- endif -%}
+  <span class="{{ cls }}" aria-label="Status: {{ status|lower }}">{{ status }}</span>
+{%- endmacro %}

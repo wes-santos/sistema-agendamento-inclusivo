@@ -1,0 +1,28 @@
+<nav class="card" aria-label="Paginação" style="padding:.5rem 1rem">
+  {# expects: page, total_pages, make_url(page) #}
+  <ul class="pagination">
+    <li>
+      {% if page > 1 %}
+        <a href="{{ make_url(page-1) }}" rel="prev" aria-label="Página anterior">‹ Anterior</a>
+      {% else %}
+        <span aria-disabled="true" style="opacity:.6">‹ Anterior</span>
+      {% endif %}
+    </li>
+    {% for p in range(1, total_pages+1) %}
+      <li>
+        {% if p == page %}
+          <span class="current" aria-current="page">{{ p }}</span>
+        {% else %}
+          <a href="{{ make_url(p) }}">{{ p }}</a>
+        {% endif %}
+      </li>
+    {% endfor %}
+    <li>
+      {% if page < total_pages %}
+        <a href="{{ make_url(page+1) }}" rel="next" aria-label="Próxima página">Próxima ›</a>
+      {% else %}
+        <span aria-disabled="true" style="opacity:.6">Próxima ›</span>
+      {% endif %}
+    </li>
+  </ul>
+</nav>

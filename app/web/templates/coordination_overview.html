@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Visão geral · Coordenação{% endblock %}
+
+{% block content %}
+  <h1>Visão geral</h1>
+  <section class="grid grid-3 mt-4" aria-label="Indicadores">
+    <div class="card"><h2>Total</h2><p style="font-size:2rem; margin:.2rem 0">{{ summary.total_appointments }}</p></div>
+    <div class="card"><h2>Cancelamentos</h2><p style="font-size:2rem; margin:.2rem 0">{{ (summary.cancel_rate*100)|round(1) }}%</p></div>
+    <div class="card"><h2>Hoje (próximos)</h2><p style="font-size:2rem; margin:.2rem 0">{{ summary.today_upcoming }}</p></div>
+  </section>
+
+  <section class="card mt-4" aria-labelledby="series-title">
+    <h2 id="series-title">Série diária</h2>
+    <table class="mt-2">
+      <thead>
+        <tr>
+          <th>Dia</th>
+          <th>Total</th>
+          <th>Agendado</th>
+          <th>Confirmado</th>
+          <th>Concluído</th>
+          <th>Cancelado</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in series_daily %}
+          <tr>
+            <td>{{ d.date_local.strftime('%d/%m') }}</td>
+            <td>{{ d.count_total }}</td>
+            <td>{{ d.count_by_status['SCHEDULED'] if 'SCHEDULED' in d.count_by_status else d.count_by_status.get('SCHEDULED', 0) }}</td>
+            <td>{{ d.count_by_status['CONFIRMED'] if 'CONFIRMED' in d.count_by_status else d.count_by_status.get('CONFIRMED', 0) }}</td>
+            <td>{{ d.count_by_status['DONE'] if 'DONE' in d.count_by_status else d.count_by_status.get('DONE', 0) }}</td>
+            <td>{{ d.count_by_status['CANCELLED'] if 'CANCELLED' in d.count_by_status else d.count_by_status.get('CANCELLED', 0) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <div class="grid grid-2 mt-4">
+    <section class="card" aria-labelledby="top-prof">
+      <h2 id="top-prof">Top profissionais</h2>
+      <ol>
+        {% for p in top_professionals %}
+          <li class="mt-2">{{ p.professional_name or ('#' ~ p.professional_id) }} — <strong>{{ p.count }}</strong></li>
+        {% endfor %}
+      </ol>
+    </section>
+
+    <section class="card" aria-labelledby="top-svc">
+      <h2 id="top-svc">Top serviços</h2>
+      <ol>
+        {% for s in top_services %}
+          <li class="mt-2">{{ s.service }} — <strong>{{ s.count }}</strong></li>
+        {% endfor %}
+      </ol>
+    </section>
+  </div>
+
+  <section class="card mt-4" aria-labelledby="recentes">
+    <h2 id="recentes">Últimos agendamentos</h2>
+    {% if recent %}
+      <ul>
+        {% for r in recent %}
+          <li class="mt-2">
+            <strong>{{ r.start_at_local.strftime('%d/%m %H:%M') }}</strong> — {{ r.service }} · {{ r.family_name or ('#' ~ r.family_id) }} ({{ r.professional_name or ('#' ~ r.professional_id) }})
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p style="color:var(--muted)">Sem itens.</p>
+    {% endif %}
+  </section>
+{% endblock %}

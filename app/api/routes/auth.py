@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.core.security import (
@@ -50,13 +51,16 @@ def _set_auth_cookies(response: Response, access: str, refresh: str) -> None:
     )
 
 
-def _clear_auth_cookies(response: Response) -> None:
+def _delete_auth_cookies(resp: Response, secure: bool = False):
     if not settings.USE_COOKIE_AUTH:
         return
-    response.delete_cookie("access_token", path="/", domain=settings.COOKIE_DOMAIN)
-    response.delete_cookie(
-        "refresh_token", path="/auth/refresh", domain=settings.COOKIE_DOMAIN
+    resp.delete_cookie(
+        "access_token", path="/", samesite="lax", secure=secure, httponly=True
     )
+    resp.delete_cookie(
+        "refresh_token", path="/", samesite="lax", secure=secure, httponly=True
+    )
+    # resp.delete_cookie("csrf_token", path="/", samesite="lax", secure=secure)
 
 
 @router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
@@ -103,10 +107,28 @@ def login(data: LoginIn, response: Response, db: Session = Depends(get_db)):  # 
     )
 
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-def logout(response: Response):
-    _clear_auth_cookies(response)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
+@router.api_route(
+    "/logout",
+    methods=["GET", "POST"],
+    name="logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def logout(request: Request):
+    next_url = request.query_params.get("next") or "/ui/login"
+    resp = RedirectResponse(url=next_url, status_code=status.HTTP_303_SEE_OTHER)
+
+    # limpa cookies de auth
+    secure = request.url.scheme == "https"
+    _delete_auth_cookies(resp, secure=secure)
+
+    # zera a sessão, mas deixa um flash para feedback
+    try:
+        request.session.clear()
+        request.session["flash"] = "Você saiu com sucesso."
+    except Exception:
+        pass
+
+    return resp
 
 
 @router.post("/refresh", response_model=LoginOut)
