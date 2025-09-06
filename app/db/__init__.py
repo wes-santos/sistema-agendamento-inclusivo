@@ -1,2 +1,2 @@
 from app.db.base import Base  # noqa: F401
-from app.models import *      # noqa: F401,F403
+from app.db.session import get_db  # noqa: F401

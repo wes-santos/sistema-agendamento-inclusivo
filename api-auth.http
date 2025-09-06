@@ -1,0 +1,80 @@
+# VSCode REST Client — Applied Project API
+# Each request is separated by `###`. Keep one blank line between headers and JSON body.
+
+@baseUrl = http://localhost:8000
+@EMAIL = admin@example.com
+@PASSWORD = Passw0rd!
+@ROLE = COORDINATION
+
+### (Optional) Health check
+GET {{baseUrl}}/healthz
+
+### (Optional) Version
+GET {{baseUrl}}/version
+
+### Register user
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "{{EMAIL}}",
+  "password": "{{PASSWORD}}",
+  "role": "{{ROLE}}"
+}
+
+### Login (cookie mode) — server may set HttpOnly cookies if USE_COOKIE_AUTH=true
+# @name login_cookie
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{EMAIL}}",
+  "password": "{{PASSWORD}}"
+}
+
+### Me (cookie mode)
+GET {{baseUrl}}/auth/me
+
+### Logout (cookie mode)
+POST {{baseUrl}}/auth/logout
+
+### Login (bearer mode) — captures tokens into response variables
+# @name login_bearer
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{EMAIL}}",
+  "password": "{{PASSWORD}}"
+}
+
+### Me (bearer mode) using token from previous login (response variable)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### Refresh (bearer mode) using refresh_token from previous login
+POST {{baseUrl}}/auth/refresh
+Authorization: Bearer {{login_bearer.response.body.$.refresh_token}}
+
+### Logout (bearer mode) — only clears cookies if any; JWTs are stateless
+POST {{baseUrl}}/auth/logout
+
+# ---- Optional protected routes (only if your app includes them) ----
+
+### Protected: FAMILY only
+GET {{baseUrl}}/protected/for-family
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### Protected: PROFESSIONAL or COORDINATION
+GET {{baseUrl}}/protected/for-professionals-and-coordination
+Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+# ---- Manual-bearer fallbacks (paste token if your server doesn't return tokens in cookie mode) ----
+
+### Me (bearer mode — manual paste)
+GET {{baseUrl}}/auth/me
+Authorization: Bearer <ACCESS_TOKEN>
+
+### Refresh (bearer mode — manual paste)
+POST {{baseUrl}}/auth/refresh
+Authorization: Bearer <REFRESH_TOKEN>

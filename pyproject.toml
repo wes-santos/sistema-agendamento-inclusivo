@@ -8,7 +8,7 @@ readme = "README.md"
 packages = [{ include = "app" }]
 
 [tool.poetry.dependencies]
-python = "^3.13"
+python = "^3.12"
 fastapi = "^0.115.0"
 uvicorn = {extras = ["standard"], version = "^0.30.0"}
 sqlalchemy = "^2.0.0"
@@ -22,6 +22,8 @@ pyjwt = "^2.9.0"
 email-validator = "^2.2.0"
 python-multipart = "^0.0.9"
 structlog = "^25.4.0"
+python-jose = "^3.5.0"
+argon2-cffi = "^25.1.0"
 
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.6.0"

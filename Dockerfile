@@ -1,5 +1,5 @@
 # ========= Builder =========
-FROM python:3.13-slim AS builder
+FROM python:3.12-slim AS builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -27,7 +27,7 @@ RUN /root/.local/bin/poetry install --no-root --only main
 COPY app ./app
 
 # ========= Runtime =========
-FROM python:3.13-slim AS runtime
+FROM python:3.12-slim AS runtime
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
     PIP_NO_CACHE_DIR=1 \
