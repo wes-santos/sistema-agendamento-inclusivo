@@ -23,7 +23,7 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         try:
             response = await call_next(request)
         except Exception as exc:
-            log.exception("request.error", exc)
+            log.exception("request.error: %s", exc)
             raise
         finally:
             duration_ms = (time.perf_counter() - started) * 1000.0

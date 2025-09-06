@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.responses import JSONResponse
 
+from app.api.routes.auth import router as auth_router
 from app.core.logging import configure_logging, get_logger
 from app.core.settings import settings
 from app.middlewares.telemetry import RequestContextMiddleware
@@ -75,6 +76,9 @@ async def proxy_headers(request: Request, call_next):
     # Se seu provedor injeta X-Forwarded-Proto/For/Host, o HTTPSRedirect vai respeitar
     # (o Uvicorn/Starlette já entende Forwarded se a infra estiver correta)
     return await call_next(request)
+
+
+app.include_router(auth_router)
 
 
 # --- Endpoints

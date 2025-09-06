@@ -9,6 +9,7 @@ from alembic import context
 # Carrega settings do app (inclui .env)
 from app.core.settings import settings
 from app.db.base import Base
+from app.models import user  # noqa: F401
 
 # Config Alembic
 config = context.config
