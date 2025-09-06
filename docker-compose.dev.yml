@@ -1,23 +1,23 @@
 services:
-  api:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-    container_name: agenda_api_dev
-    command: bash -lc "/root/.local/bin/poetry install --with dev --no-root && /root/.local/bin/poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-access-log" 
-    env_file: .env.dev
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./app:/app/app:rw,delegated
-      - ./pyproject.toml:/app/pyproject.toml:rw
-      - ./poetry.lock:/app/poetry.lock:rw
-      - ./alembic.ini:/app/alembic.ini:rw
-      - ./alembic:/app/alembic:rw
+  # api:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.dev
+  #   container_name: agenda_api_dev
+  #   command: bash -lc "/root/.local/bin/poetry install --with dev --no-root && /root/.local/bin/poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-access-log" 
+  #   env_file: .env.dev
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - ./app:/app/app:rw,delegated
+  #     - ./pyproject.toml:/app/pyproject.toml:rw
+  #     - ./poetry.lock:/app/poetry.lock:rw
+  #     - ./alembic.ini:/app/alembic.ini:rw
+  #     - ./alembic:/app/alembic:rw
 
-    depends_on:
-      - db
-      - mailhog
+  #   depends_on:
+  #     - db
+  #     - mailhog
 
   db:
     image: postgres:16
