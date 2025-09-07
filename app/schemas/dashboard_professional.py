@@ -9,8 +9,8 @@ from app.models.appointment import AppointmentStatus
 
 class ProApptItem(BaseModel):
     id: int
-    family_id: int | None = None
-    family_name: str | None = None  # se houver relationship/nome disponível
+    student_id: int | None = None
+    student_name: str | None = None
     service: str
     status: AppointmentStatus
     location: str | None = None

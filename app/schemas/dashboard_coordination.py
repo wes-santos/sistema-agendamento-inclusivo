@@ -49,8 +49,8 @@ class CoordRecentAppt(BaseModel):
     start_at_local: datetime
     professional_id: int
     professional_name: str | None = None
-    family_id: int
-    family_name: str | None = None
+    student_id: int
+    student_name: str | None = None
 
 
 class CoordOverviewResponse(BaseModel):

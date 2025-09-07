@@ -2,9 +2,10 @@
 # Each request is separated by `###`. Keep one blank line between headers and JSON body.
 
 @baseUrl = http://localhost:8000
-@EMAIL = admin@example.com
+@EMAIL = student@example.com
+@NAME = Weslley Santos
 @PASSWORD = Passw0rd!
-@ROLE = COORDINATION
+@ROLE = STUDENT
 
 ### (Optional) Health check
 GET {{baseUrl}}/healthz
@@ -18,6 +19,7 @@ Content-Type: application/json
 
 {
   "email": "{{EMAIL}}",
+  "name": "{{NAME}}",
   "password": "{{PASSWORD}}",
   "role": "{{ROLE}}"
 }
@@ -61,8 +63,8 @@ POST {{baseUrl}}/auth/logout
 
 # ---- Optional protected routes (only if your app includes them) ----
 
-### Protected: FAMILY only
-GET {{baseUrl}}/auth/only-family
+### Protected: STUDENT only
+GET {{baseUrl}}/auth/only-student
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
 ### Protected: PROFESSIONAL
@@ -83,17 +85,17 @@ Authorization: Bearer <ACCESS_TOKEN>
 POST {{baseUrl}}/auth/refresh
 Authorization: Bearer <REFRESH_TOKEN>
 
-### Dashboard Family: List My Appointments
+### Dashboard Student: List My Appointments
 
-GET {{baseUrl}}/dashboard/family/appointments?range=upcoming&page=1&page_size=10
+GET {{baseUrl}}/dashboard/student/appointments?range=upcoming&page=1&page_size=10
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
 ### 
-GET {{baseUrl}}/dashboard/family/appointments?range=past&status=DONE
+GET {{baseUrl}}/dashboard/student/appointments?range=past&status=DONE
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
 ###
-GET {{baseUrl}}/dashboard/family/appointments?date_from=2025-09-01T00:00:00Z&date_to=2025-09-30T23:59:59Z&q=fono
+GET {{baseUrl}}/dashboard/student/appointments?date_from=2025-09-01T00:00:00Z&date_to=2025-09-30T23:59:59Z&q=fono
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
 ### Professional Dashboard: My Schedule

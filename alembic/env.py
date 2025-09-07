@@ -4,12 +4,12 @@ from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
+import app.db.base  # noqa: F401
 from alembic import context
 
 # Carrega settings do app (inclui .env)
 from app.core.settings import settings
-from app.db.base import Base
-from app.models import user  # noqa: F401
+from app.db.base_class import Base
 
 # Config Alembic
 config = context.config

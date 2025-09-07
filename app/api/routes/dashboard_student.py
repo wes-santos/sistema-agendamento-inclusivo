@@ -11,22 +11,22 @@ from app.db import get_db
 from app.deps import require_roles
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.user import Role, User
-from app.schemas.dashboard_family import (
-    FamilyApptItem,
-    FamilyApptResponse,
-    FamilyApptSummary,
+from app.schemas.dashboard_student import (
+    StudentApptItem,
+    StudentApptResponse,
+    StudentApptSummary,
 )
 
-router = APIRouter(prefix="/dashboard/family", tags=["dashboard-family"])
+router = APIRouter(prefix="/dashboard/student", tags=["dashboard-student"])
 
 RangeType = Annotated[
     Literal["upcoming", "past", "all"], Query(description="Intervalo de tempo")
 ]
 
 
-@router.get("/appointments", response_model=FamilyApptResponse)
+@router.get("/appointments", response_model=StudentApptResponse)
 def list_my_appointments(  # noqa: PLR0913
-    current_user: User = Depends(require_roles(Role.FAMILY)),
+    current_user: User = Depends(require_roles(Role.STUDENT)),
     db: Session = Depends(get_db),
     range: RangeType = "upcoming",
     status: list[AppointmentStatus] | None = Query(
@@ -49,20 +49,20 @@ def list_my_appointments(  # noqa: PLR0913
 ):
     # Monta filtros base
     now_utc = datetime.utcnow().astimezone()
-    conds = [Appointment.family_id == current_user.id]
+    conds = [Appointment.student_id == current_user.id]
 
     if range == "upcoming":
-        conds.append(Appointment.start_at >= now_utc)
+        conds.append(Appointment.starts_at >= now_utc)
     elif range == "past":
-        conds.append(Appointment.start_at < now_utc)
+        conds.append(Appointment.starts_at < now_utc)
 
     if status:
         conds.append(Appointment.status.in_(status))
 
     if date_from:
-        conds.append(Appointment.start_at >= date_from)
+        conds.append(Appointment.starts_at >= date_from)
     if date_to:
-        conds.append(Appointment.start_at < date_to)
+        conds.append(Appointment.starts_at < date_to)
 
     if q:
         like = f"%{q}%"
@@ -71,7 +71,7 @@ def list_my_appointments(  # noqa: PLR0913
         )
 
     query = (
-        db.query(Appointment).filter(and_(*conds)).order_by(Appointment.start_at.asc())
+        db.query(Appointment).filter(and_(*conds)).order_by(Appointment.starts_at.asc())
     )
 
     # total antes da paginação
@@ -86,7 +86,7 @@ def list_my_appointments(  # noqa: PLR0913
     # counts
     base = (
         db.query(Appointment.status, func.count(Appointment.id))
-        .filter(Appointment.family_id == current_user.id)
+        .filter(Appointment.student_id == current_user.id)
         .group_by(Appointment.status)
         .all()
     )
@@ -98,11 +98,11 @@ def list_my_appointments(  # noqa: PLR0913
     next_appt = (
         db.query(Appointment)
         .filter(
-            Appointment.family_id == current_user.id,
-            Appointment.start_at >= now_utc,
+            Appointment.student_id == current_user.id,
+            Appointment.starts_at >= now_utc,
             Appointment.status != AppointmentStatus.CANCELLED,
         )
-        .order_by(Appointment.start_at.asc())
+        .order_by(Appointment.starts_at.asc())
         .first()
     )
 
@@ -117,40 +117,40 @@ def list_my_appointments(  # noqa: PLR0913
         except Exception:
             tz = None
 
-    def _item(ap: Appointment) -> FamilyApptItem:
+    def _item(ap: Appointment) -> StudentApptItem:
         # tenta pegar nome do professional se a relationship existir; senão devolve None e mantém o id
         prof_name = None
         try:
             prof_name = getattr(ap.professional, "email", None) or getattr(
-                ap.professional, "full_name", None
+                ap.professional, "name", None
             )
         except Exception:
             prof_name = None
 
-        return FamilyApptItem(
+        return StudentApptItem(
             id=ap.id,
             service=ap.service,
             status=ap.status,
-            start_at_utc=ap.start_at,
-            end_at_utc=ap.end_at,
-            start_at_local=(ap.start_at.astimezone(tz) if tz else None),
+            start_at_utc=ap.starts_at,
+            end_at_utc=ap.ends_at,
+            start_at_local=(ap.starts_at.astimezone(tz) if tz else None),
             end_at_local=(ap.end_at.astimezone(tz) if tz else None),
             location=ap.location,
             professional_id=ap.professional_id,
             professional_name=prof_name,
         )
 
-    summary = FamilyApptSummary(
+    summary = StudentApptSummary(
         total_upcoming=int(
             count_by_status.get("SCHEDULED", 0) + count_by_status.get("CONFIRMED", 0)
         ),
         total_past=int(count_by_status.get("DONE", 0)),
         total_cancelled=int(count_by_status.get("CANCELLED", 0)),
-        next_appointment_start_utc=(next_appt.start_at if next_appt else None),
+        next_appointment_start_utc=(next_appt.starts_at if next_appt else None),
         next_appointment_service=(next_appt.service if next_appt else None),
     )
 
-    return FamilyApptResponse(
+    return StudentApptResponse(
         summary=summary,
         page=page,
         page_size=page_size,

@@ -13,7 +13,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base  # seu Base compartilhado
+from app.db.base_class import Base
 
 
 class AppointmentStatus(str, enum.Enum):

@@ -79,13 +79,15 @@ def coordination_overview(
 
     # -------- KPI counts
     base_q = db.query(Appointment).filter(
-        and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc)
+        and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
     )
 
     # count by status
     rows = (
         db.query(Appointment.status, func.count(Appointment.id))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .group_by(Appointment.status)
         .all()
     )
@@ -100,12 +102,16 @@ def coordination_overview(
     # ativos (distintos)
     professionals_active = (
         db.query(func.count(func.distinct(Appointment.professional_id)))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .scalar()
     ) or 0
     families_active = (
-        db.query(func.count(func.distinct(Appointment.family_id)))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+        db.query(func.count(func.distinct(Appointment.student_id)))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .scalar()
     ) or 0
 
@@ -116,8 +122,8 @@ def coordination_overview(
         db.query(func.count(Appointment.id))
         .filter(
             and_(
-                Appointment.start_at >= day0.astimezone(ZoneInfo("UTC")),
-                Appointment.start_at < day1.astimezone(ZoneInfo("UTC")),
+                Appointment.starts_at >= day0.astimezone(ZoneInfo("UTC")),
+                Appointment.starts_at < day1.astimezone(ZoneInfo("UTC")),
                 Appointment.status != AppointmentStatus.CANCELLED,
             )
         )
@@ -145,8 +151,8 @@ def coordination_overview(
         cur += timedelta(days=1)
 
     # pega status+start para a janela e bucketiza por dia local
-    for s, dt in db.query(Appointment.status, Appointment.start_at).filter(
-        and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc)
+    for s, dt in db.query(Appointment.status, Appointment.starts_at).filter(
+        and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
     ):
         d_local = dt.astimezone(tz).date()
         if d_local in series_map:
@@ -164,7 +170,9 @@ def coordination_overview(
     # -------- Top profissionais (por contagem na janela)
     prof_rows = (
         db.query(Appointment.professional_id, func.count(Appointment.id).label("c"))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .group_by(Appointment.professional_id)
         .order_by(func.count(Appointment.id).desc())
         .limit(limit_lists)
@@ -176,7 +184,7 @@ def coordination_overview(
     if prof_rows:
         prof_ids = [pid for (pid, _c) in prof_rows]
         name_map = {
-            u.id: (getattr(u, "full_name", None) or getattr(u, "email", None))
+            u.id: (getattr(u, "name", None) or getattr(u, "email", None))
             for u in db.query(User).filter(User.id.in_(prof_ids)).all()
         }
         for pid, c in prof_rows:
@@ -191,7 +199,9 @@ def coordination_overview(
     # -------- Top serviços
     svc_rows = (
         db.query(Appointment.service, func.count(Appointment.id).label("c"))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .group_by(Appointment.service)
         .order_by(func.count(Appointment.id).desc())
         .limit(limit_lists)
@@ -202,22 +212,24 @@ def coordination_overview(
         for (s, c) in svc_rows
     ]
 
-    # -------- Recentes (ordenado por criação se houver; senão por start_at desc)
+    # -------- Recentes (ordenado por criação se houver; senão por starts_at desc)
     # Se seu model tiver created_at/updated_at timezone-aware, prefira created_at.
     recent_rows = (
         db.query(Appointment)
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
-        .order_by(getattr(Appointment, "created_at", Appointment.start_at).desc())
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
+        .order_by(getattr(Appointment, "created_at", Appointment.starts_at).desc())
         .limit(limit_lists)
         .all()
     )
 
     # mapear nomes
-    family_name_map = {}
-    fam_ids = list({r.family_id for r in recent_rows})
-    if fam_ids:
-        for u in db.query(User).filter(User.id.in_(fam_ids)).all():
-            family_name_map[u.id] = getattr(u, "full_name", None) or getattr(
+    student_name_map = {}
+    student_ids = list({r.student_id for r in recent_rows})
+    if student_ids:
+        for u in db.query(User).filter(User.id.in_(student_ids)).all():
+            student_name_map[u.id] = getattr(u, "name", None) or getattr(
                 u, "email", None
             )
 
@@ -225,21 +237,19 @@ def coordination_overview(
     pro_ids = list({r.professional_id for r in recent_rows})
     if pro_ids:
         for u in db.query(User).filter(User.id.in_(pro_ids)).all():
-            prof_name_map[u.id] = getattr(u, "full_name", None) or getattr(
-                u, "email", None
-            )
+            prof_name_map[u.id] = getattr(u, "name", None) or getattr(u, "email", None)
 
     recent = [
         CoordRecentAppt(
             id=r.id,
             service=r.service,
             status=r.status,
-            start_at_utc=r.start_at,
-            start_at_local=r.start_at.astimezone(tz),
+            start_at_utc=r.starts_at,
+            start_at_local=r.starts_at.astimezone(tz),
             professional_id=r.professional_id,
             professional_name=prof_name_map.get(r.professional_id),
-            family_id=r.family_id,
-            family_name=family_name_map.get(r.family_id),
+            student_id=r.student_id,
+            student_name=student_name_map.get(r.student_id),
         )
         for r in recent_rows
     ]
