@@ -62,8 +62,8 @@ def my_week_schedule(
     # Filtros base
     conds = [
         Appointment.professional_id == current_user.id,
-        Appointment.start_at >= start_utc,
-        Appointment.start_at < end_utc,
+        Appointment.starts_at >= start_utc,
+        Appointment.starts_at < end_utc,
     ]
     if statuses:
         conds.append(Appointment.status.in_(statuses))
@@ -74,7 +74,7 @@ def my_week_schedule(
         conds.append(not_(Appointment.status == AppointmentStatus.CANCELLED))
 
     # Query itens
-    q = db.query(Appointment).filter(and_(*conds)).order_by(Appointment.start_at.asc())
+    q = db.query(Appointment).filter(and_(*conds)).order_by(Appointment.starts_at.asc())
     appts = q.all()
 
     # Agrupar por dia local
@@ -84,16 +84,16 @@ def my_week_schedule(
     days_map: dict[date, list[ProApptItem]] = defaultdict(list)
 
     for ap in appts:
-        start_local_dt = ap.start_at.astimezone(tz)
+        start_local_dt = ap.starts_at.astimezone(tz)
         end_local_dt = ap.end_at.astimezone(tz)
         item = ProApptItem(
             id=ap.id,
-            family_id=ap.family_id,
-            family_name=getattr(getattr(ap, "family", None), "full_name", None),
+            student_id=ap.student_id,
+            student_name=getattr(getattr(ap, "student", None), "name", None),
             service=ap.service,
             status=ap.status,
             location=ap.location,
-            start_at_utc=ap.start_at,
+            start_at_utc=ap.starts_at,
             end_at_utc=ap.end_at,
             start_at_local=start_local_dt,
             end_at_local=end_local_dt,
@@ -102,7 +102,7 @@ def my_week_schedule(
 
     # Ordenar por horário em cada dia
     for items in days_map.values():
-        items.sort(key=lambda i: i.start_at_local)
+        items.sort(key=lambda i: i.starts_at_local)
 
     # Construir lista ordenada de dias seg→dom
     days = []
@@ -120,8 +120,8 @@ def my_week_schedule(
         .filter(
             and_(
                 Appointment.professional_id == current_user.id,
-                Appointment.start_at >= start_utc,
-                Appointment.start_at < end_utc,
+                Appointment.starts_at >= start_utc,
+                Appointment.starts_at < end_utc,
             )
         )
         .group_by(Appointment.status)

@@ -14,11 +14,12 @@ from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse
 
+import app.db.base
 from app.api.routes.auth import router as auth_router
 from app.api.routes.dashboard_coordination import (
     router as dashboard_coordination_router,
 )
-from app.api.routes.dashboard_family import router as dashboard_family_router
+from app.api.routes.dashboard_student import router as dashboard_student_router
 from app.api.routes.dashboard_professional import (
     router as dashboard_professional_router,
 )
@@ -118,7 +119,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
-app.include_router(dashboard_family_router)
+app.include_router(dashboard_student_router)
 app.include_router(dashboard_professional_router)
 app.include_router(dashboard_coordination_router)
 app.include_router(ui_router)
@@ -163,8 +164,8 @@ def home_redirect(
     if not current_user:
         return RedirectResponse("/ui/login", status_code=303)
     # mesmo roteamento da after-login
-    if current_user.role == Role.FAMILY:
-        return RedirectResponse("/ui/family/appointments", status_code=303)
+    if current_user.role == Role.STUDENT:
+        return RedirectResponse("/ui/student/appointments", status_code=303)
     if current_user.role == Role.PROFESSIONAL:
         return RedirectResponse("/ui/professional/week", status_code=303)
     if current_user.role == Role.COORDINATION:

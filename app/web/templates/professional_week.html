@@ -14,7 +14,7 @@
             {% for it in day['items'] %}
               <li class="mt-2">
                 <div><strong>{{ it.start_at_local.strftime('%H:%M') }}–{{ it.end_at_local.strftime('%H:%M') }}</strong> — {{ it.service }}</div>
-                <div style="color:var(--muted)">Família: {{ it.family_name or ('#' ~ it.family_id) }} · Local: {{ it.location or '—' }}</div>
+                <div style="color:var(--muted)">Família: {{ it.student_name or ('#' ~ it.student_id) }} · Local: {{ it.location or '—' }}</div>
               </li>
             {% endfor %}
           </ul>

@@ -63,7 +63,7 @@
       <ul>
         {% for r in recent %}
           <li class="mt-2">
-            <strong>{{ r.start_at_local.strftime('%d/%m %H:%M') }}</strong> — {{ r.service }} · {{ r.family_name or ('#' ~ r.family_id) }} ({{ r.professional_name or ('#' ~ r.professional_id) }})
+            <strong>{{ r.start_at_local.strftime('%d/%m %H:%M') }}</strong> — {{ r.service }} · {{ r.student_name or ('#' ~ r.student_id) }} ({{ r.professional_name or ('#' ~ r.professional_id) }})
           </li>
         {% endfor %}
       </ul>

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from app.models.appointment import AppointmentStatus
 
 
-class FamilyApptItem(BaseModel):
+class StudentApptItem(BaseModel):
     id: int
     service: str
     status: AppointmentStatus
@@ -20,7 +20,7 @@ class FamilyApptItem(BaseModel):
     professional_name: str | None = None
 
 
-class FamilyApptSummary(BaseModel):
+class StudentApptSummary(BaseModel):
     total_upcoming: int
     total_past: int
     total_cancelled: int
@@ -28,9 +28,9 @@ class FamilyApptSummary(BaseModel):
     next_appointment_service: str | None = None
 
 
-class FamilyApptResponse(BaseModel):
-    summary: FamilyApptSummary
+class StudentApptResponse(BaseModel):
+    summary: StudentApptSummary
     page: int
     page_size: int
     total_items: int
-    items: list[FamilyApptItem]
+    items: list[StudentApptItem]

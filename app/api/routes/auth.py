@@ -78,6 +78,7 @@ def register_user(payload: UserCreate, db: Session = Depends(get_db)):  # noqa: 
 
     user = User(
         email=payload.email,
+        name=payload.name,
         password_hash=hash_password(payload.password),
         role=payload.role,
     )
@@ -213,8 +214,8 @@ def only_professional(
     return {"ok": True, "user_role": user.role}
 
 
-@router.get("/only-family")
-def only_family(
-    user: User = Depends(require_roles(Role.FAMILY)),
+@router.get("/only-student")
+def only_student(
+    user: User = Depends(require_roles(Role.STUDENT)),
 ):
     return {"ok": True, "user_role": user.role}

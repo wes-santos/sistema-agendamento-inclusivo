@@ -14,7 +14,7 @@ from app.db import get_db
 from app.deps import require_roles
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.user import Role, User
-from app.schemas.dashboard_family import FamilyApptItem, FamilyApptSummary
+from app.schemas.dashboard_student import StudentApptItem, StudentApptSummary
 from app.utils.week import DEFAULT_TZ, week_bounds_local
 
 router = APIRouter(prefix="/ui", tags=["ui"])
@@ -46,10 +46,10 @@ def login_page(request: Request):
 
 
 # -------- Família: Meus agendamentos
-@router.get("/family/appointments")
-def ui_family_appointments(
+@router.get("/student/appointments")
+def ui_student_appointments(
     request: Request,
-    current_user: Annotated[User, Depends(require_roles(Role.FAMILY))],
+    current_user: Annotated[User, Depends(require_roles(Role.STUDENT))],
     db: Annotated[Session, Depends(get_db)],
     range: str = Query(default="upcoming", pattern="^(upcoming|past|all)$"),
     status: str | None = Query(default=None),
@@ -69,11 +69,11 @@ def ui_family_appointments(
 
     now_utc = datetime.now(tz).astimezone(ZoneInfo("UTC"))
 
-    conds = [Appointment.family_id == current_user.id]
+    conds = [Appointment.student_id == current_user.id]
     if range == "upcoming":
-        conds.append(Appointment.start_at >= now_utc)
+        conds.append(Appointment.starts_at >= now_utc)
     elif range == "past":
-        conds.append(Appointment.start_at < now_utc)
+        conds.append(Appointment.starts_at < now_utc)
 
     if status:
         try:
@@ -83,9 +83,9 @@ def ui_family_appointments(
             pass
 
     if date_from:
-        conds.append(Appointment.start_at >= date_from)
+        conds.append(Appointment.starts_at >= date_from)
     if date_to:
-        conds.append(Appointment.start_at < date_to)
+        conds.append(Appointment.starts_at < date_to)
 
     if q:
         like = f"%{q}%"
@@ -94,7 +94,7 @@ def ui_family_appointments(
         )
 
     qbase = (
-        db.query(Appointment).filter(and_(*conds)).order_by(Appointment.start_at.asc())
+        db.query(Appointment).filter(and_(*conds)).order_by(Appointment.starts_at.asc())
     )
     total_items = qbase.count()
     page = max(1, page)
@@ -104,7 +104,7 @@ def ui_family_appointments(
     # Summary (simplificado)
     rows = (
         db.query(Appointment.status, func.count(Appointment.id))
-        .filter(Appointment.family_id == current_user.id)
+        .filter(Appointment.student_id == current_user.id)
         .group_by(Appointment.status)
         .all()
     )
@@ -116,50 +116,50 @@ def ui_family_appointments(
     next_appt = (
         db.query(Appointment)
         .filter(
-            Appointment.family_id == current_user.id,
-            Appointment.start_at >= now_utc,
+            Appointment.student_id == current_user.id,
+            Appointment.starts_at >= now_utc,
             Appointment.status != AppointmentStatus.CANCELLED,
         )
-        .order_by(Appointment.start_at.asc())
+        .order_by(Appointment.starts_at.asc())
         .first()
     )
 
-    def _to_item(ap: Appointment) -> FamilyApptItem:
+    def _to_item(ap: Appointment) -> StudentApptItem:
         prof_name = None
         try:
-            prof_name = getattr(ap.professional, "full_name", None) or getattr(
+            prof_name = getattr(ap.professional, "name", None) or getattr(
                 ap.professional, "email", None
             )
         except Exception:
             pass
-        return FamilyApptItem(
+        return StudentApptItem(
             id=ap.id,
             service=ap.service,
             status=ap.status,
-            start_at_utc=ap.start_at,
+            start_at_utc=ap.starts_at,
             end_at_utc=ap.end_at,
-            start_at_local=ap.start_at.astimezone(tz),
+            start_at_local=ap.starts_at.astimezone(tz),
             end_at_local=ap.end_at.astimezone(tz),
             location=ap.location,
             professional_id=ap.professional_id,
             professional_name=prof_name,
         )
 
-    summary = FamilyApptSummary(
+    summary = StudentApptSummary(
         total_upcoming=int(
             count_by_status.get("SCHEDULED", 0) + count_by_status.get("CONFIRMED", 0)
         ),
         total_past=int(count_by_status.get("DONE", 0)),
         total_cancelled=int(count_by_status.get("CANCELLED", 0)),
-        next_appointment_start_utc=next_appt.start_at if next_appt else None,
+        next_appointment_start_utc=next_appt.starts_at if next_appt else None,
         next_appointment_service=next_appt.service if next_appt else None,
     )
 
     total_pages = max(1, (total_items + page_size - 1) // page_size)
-    trail = [("/", "Início"), ("/ui/family/appointments", "Meus agendamentos")]
+    trail = [("/", "Início"), ("/ui/student/appointments", "Meus agendamentos")]
 
     return templates.TemplateResponse(
-        "family_my_schedules.html",
+        "student_my_schedules.html",
         {
             "request": request,
             "current_user": current_user,
@@ -200,8 +200,8 @@ def ui_professional_week(
 
     conds = [
         Appointment.professional_id == current_user.id,
-        Appointment.start_at >= start_utc,
-        Appointment.start_at < end_utc,
+        Appointment.starts_at >= start_utc,
+        Appointment.starts_at < end_utc,
     ]
     if statuses:
         conds.append(Appointment.status.in_(statuses))
@@ -211,7 +211,7 @@ def ui_professional_week(
     appts = (
         db.query(Appointment)
         .filter(and_(*conds))
-        .order_by(Appointment.start_at.asc())
+        .order_by(Appointment.starts_at.asc())
         .all()
     )
 
@@ -220,7 +220,7 @@ def ui_professional_week(
 
     days_map: dict[date, list] = defaultdict(list)
     for ap in appts:
-        sl = ap.start_at.astimezone(tz)
+        sl = ap.starts_at.astimezone(tz)
         el = ap.end_at.astimezone(tz)
         days_map[sl.date()].append(
             {
@@ -228,9 +228,9 @@ def ui_professional_week(
                 "service": ap.service,
                 "status": ap.status,
                 "location": ap.location,
-                "family_name": getattr(getattr(ap, "family", None), "full_name", None)
-                or getattr(getattr(ap, "family", None), "email", None),
-                "family_id": ap.family_id,
+                "student_name_name": getattr(getattr(ap, "student", None), "name", None)
+                or getattr(getattr(ap, "student", None), "email", None),
+                "student_id": ap.student_id,
                 "start_at_local": sl,
                 "end_at_local": el,
             }
@@ -251,8 +251,8 @@ def ui_professional_week(
         .filter(
             and_(
                 Appointment.professional_id == current_user.id,
-                Appointment.start_at >= start_utc,
-                Appointment.start_at < end_utc,
+                Appointment.starts_at >= start_utc,
+                Appointment.starts_at < end_utc,
             )
         )
         .group_by(Appointment.status)
@@ -320,7 +320,9 @@ def ui_coordination_overview(
 
     rows = (
         db.query(Appointment.status, func.count(Appointment.id))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .group_by(Appointment.status)
         .all()
     )
@@ -334,13 +336,17 @@ def ui_coordination_overview(
 
     professionals_active = (
         db.query(func.count(func.distinct(Appointment.professional_id)))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .scalar()
         or 0
     )
-    families_active = (
-        db.query(func.count(func.distinct(Appointment.family_id)))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+    students_active = (
+        db.query(func.count(func.distinct(Appointment.student_id)))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .scalar()
         or 0
     )
@@ -351,8 +357,8 @@ def ui_coordination_overview(
     while cur < end_local:
         series_map[cur.date()] = {s: 0 for s in AppointmentStatus}
         cur += timedelta(days=1)
-    for s, dt in db.query(Appointment.status, Appointment.start_at).filter(
-        and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc)
+    for s, dt in db.query(Appointment.status, Appointment.starts_at).filter(
+        and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
     ):
         d_local = dt.astimezone(tz).date()
         if d_local in series_map:
@@ -369,7 +375,9 @@ def ui_coordination_overview(
     # Tops
     prof_rows = (
         db.query(Appointment.professional_id, func.count(Appointment.id))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .group_by(Appointment.professional_id)
         .order_by(func.count(Appointment.id).desc())
         .limit(limit_lists)
@@ -378,7 +386,7 @@ def ui_coordination_overview(
     prof_ids = [pid for (pid, _c) in prof_rows]
     name_map = (
         {
-            u.id: (getattr(u, "full_name", None) or getattr(u, "email", None))
+            u.id: (getattr(u, "name", None) or getattr(u, "email", None))
             for u in db.query(User).filter(User.id.in_(prof_ids)).all()
         }
         if prof_ids
@@ -395,7 +403,9 @@ def ui_coordination_overview(
 
     svc_rows = (
         db.query(Appointment.service, func.count(Appointment.id))
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
         .group_by(Appointment.service)
         .order_by(func.count(Appointment.id).desc())
         .limit(limit_lists)
@@ -407,21 +417,23 @@ def ui_coordination_overview(
 
     recent_rows = (
         db.query(Appointment)
-        .filter(and_(Appointment.start_at >= start_utc, Appointment.start_at < end_utc))
-        .order_by(getattr(Appointment, "created_at", Appointment.start_at).desc())
+        .filter(
+            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+        )
+        .order_by(getattr(Appointment, "created_at", Appointment.starts_at).desc())
         .limit(limit_lists)
         .all()
     )
-    fam_map = {}
-    fam_ids = list({r.family_id for r in recent_rows})
-    if fam_ids:
-        for u in db.query(User).filter(User.id.in_(fam_ids)).all():
-            fam_map[u.id] = getattr(u, "full_name", None) or getattr(u, "email", None)
+    stud_map = {}
+    stud_ids = list({r.student_id for r in recent_rows})
+    if stud_ids:
+        for u in db.query(User).filter(User.id.in_(stud_ids)).all():
+            stud_map[u.id] = getattr(u, "name", None) or getattr(u, "email", None)
     pro_map = {}
     pro_ids = list({r.professional_id for r in recent_rows})
     if pro_ids:
         for u in db.query(User).filter(User.id.in_(pro_ids)).all():
-            pro_map[u.id] = getattr(u, "full_name", None) or getattr(u, "email", None)
+            pro_map[u.id] = getattr(u, "name", None) or getattr(u, "email", None)
     recent = [
         {
             "id": r.id,
@@ -431,8 +443,8 @@ def ui_coordination_overview(
             "start_at_local": r.start_at.astimezone(tz),
             "professional_id": r.professional_id,
             "professional_name": pro_map.get(r.professional_id),
-            "family_id": r.family_id,
-            "family_name": fam_map.get(r.family_id),
+            "student_id": r.student_id,
+            "student_name": stud_map.get(r.student_id),
         }
         for r in recent_rows
     ]
@@ -445,7 +457,7 @@ def ui_coordination_overview(
         "count_by_status": count_by_status,
         "cancel_rate": cancel_rate,
         "professionals_active": int(professionals_active),
-        "families_active": int(families_active),
+        "families_active": int(students_active),
         "today_upcoming": 0,
     }
 

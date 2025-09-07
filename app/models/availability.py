@@ -12,7 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
+from app.db.base_class import Base
 
 
 class Availability(Base):
@@ -38,8 +38,10 @@ class Availability(Base):
     weekday: Mapped[int] = mapped_column(
         Integer, nullable=False
     )  # 0=segunda ... 6=domingo
-    starts_utc: Mapped = mapped_column(Time(), nullable=False)  # time do dia em UTC
-    ends_utc: Mapped = mapped_column(Time(), nullable=False)
+    starts_utc: Mapped[dt.time] = mapped_column(
+        Time(), nullable=False
+    )  # time do dia em UTC
+    ends_utc: Mapped[dt.time] = mapped_column(Time(), nullable=False)
 
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
