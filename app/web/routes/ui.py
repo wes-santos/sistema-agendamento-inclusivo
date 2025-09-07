@@ -346,7 +346,12 @@ def ui_professional_week(
             # página amigável se não estiver vinculado
             return templates.TemplateResponse(
                 "professional_link_missing.html",
-                {"request": request, "current_user": current_user},
+                {
+                    "request": request,
+                    "current_user": current_user,
+                    "link_request_url": "/ui/coordination/link-request",
+                    "support_email": "coordenacao@suaescola.com.br",
+                },
                 status_code=403,
             )
     else:  # COORDINATION
