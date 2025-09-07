@@ -10,12 +10,17 @@
     --panel: #111827;
     --muted: #9CA3AF;
     --text: #F9FAFB;
-    --accent: #60A5FA; /* azul */
-    --accent-2: #34D399; /* verde */
-    --accent-3: #F59E0B; /* amarelo */
-    --accent-4: #F87171; /* vermelho */
+    --accent: #60A5FA;
+    /* azul */
+    --accent-2: #34D399;
+    /* verde */
+    --accent-3: #F59E0B;
+    /* amarelo */
+    --accent-4: #F87171;
+    /* vermelho */
     --ring: #93C5FD;
   }
+
   @media (prefers-color-scheme: light) {
     :root {
       --bg: #F3F4F6;
@@ -25,55 +30,298 @@
       --ring: #2563EB;
     }
   }
-  .page { background: var(--bg); color: var(--text); min-height: 100%; }
-  .container { max-width: 1200px; margin: 0 auto; padding: 1rem; }
-  .grid { display: grid; gap: 1rem; }
-  .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .card { background: var(--panel); border-radius: 1rem; padding: 1rem; box-shadow: 0 10px 20px rgba(0,0,0,0.2); }
-  .header { display:flex; align-items:center; justify-content:space-between; gap: 1rem; }
-  .title { font-size: 1.25rem; font-weight: 700; }
-  .subtle { color: var(--muted); font-size: .95rem; }
-  .row { display:flex; flex-wrap: wrap; gap: 0.75rem; align-items: end; }
-  .btn { display:inline-flex; align-items:center; gap:.5rem; border:1px solid transparent; padding:.6rem .9rem; border-radius:.75rem; text-decoration:none; color: var(--text); background: #1F2937; }
-  .btn:hover { filter: brightness(1.1); }
-  .btn:focus { outline: 3px solid var(--ring); outline-offset: 2px; }
-  .btn-ghost { background: transparent; border-color:#374151; }
-  .btn-primary { background: var(--accent); color: #0b0f17; font-weight: 700; }
-  .btn-outline { background: transparent; border-color: var(--accent); color: var(--accent); }
-  .period { display:flex; align-items:center; gap:.5rem; font-weight:600; }
-  .kpis { display:grid; gap:1rem; grid-template-columns: repeat(4, minmax(0,1fr)); }
-  .kpi { border:1px solid #1F2937; padding:1rem; border-radius: .75rem; background: #0f1623; }
-  .kpi h3 { font-size:.9rem; color: var(--muted); margin:0; }
-  .kpi strong { font-size:1.75rem; line-height:1.2; display:block; margin-top:.25rem; }
-  .kpi--total strong { color: var(--accent); }
-  .kpi--confirmado strong { color: var(--accent-2); }
-  .kpi--cancelado strong { color: var(--accent-4); }
-  .kpi--realizado strong { color: var(--accent-3); }
-  .filters { display:grid; gap:1rem; grid-template-columns: 1fr 1fr; }
-  .field { display:flex; flex-direction:column; gap:.35rem; }
-  .field label { font-weight:600; }
-  .input, .select { background: #0f1623; border:1px solid #1F2937; color: var(--text); padding:.65rem .8rem; border-radius:.6rem; }
-  .input:focus, .select:focus { outline:3px solid var(--ring); outline-offset:2px; }
-  .table { width:100%; border-collapse:separate; border-spacing:0 8px; }
-  .thead th { text-align:left; color: var(--muted); font-weight:700; font-size:.85rem; padding:.4rem .75rem; }
-  .tbody tr { background: var(--panel); }
-  .tbody td { padding:.9rem .75rem; border-top:1px solid #1F2937; border-bottom:1px solid #1F2937; }
-  .tbody tr td:first-child { border-left:1px solid #1F2937; border-top-left-radius:.6rem; border-bottom-left-radius:.6rem; }
-  .tbody tr td:last-child { border-right:1px solid #1F2937; border-top-right-radius:.6rem; border-bottom-right-radius:.6rem; }
-  .badge { display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem; border-radius:999px; padding:.25rem .6rem; border:1px solid transparent; }
-  .badge--confirmado { background: rgba(52,211,153,.15); color:#34D399; border-color: rgba(52,211,153,.4); }
-  .badge--cancelado { background: rgba(248,113,113,.15); color:#F87171; border-color: rgba(248,113,113,.4); }
-  .badge--realizado { background: rgba(245,158,11,.15); color:#F59E0B; border-color: rgba(245,158,11,.4); }
-  .badge--pendente { background: rgba(96,165,250,.15); color:#60A5FA; border-color: rgba(96,165,250,.4); }
-  .sr-only { position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0; }
-  .skip-link { position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden; }
-  .skip-link:focus { position:static; width:auto; height:auto; background:var(--accent); color:#000; padding:.5rem .75rem; border-radius:.5rem; }
+
+  .page {
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100%;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem;
+  }
+
+  .grid {
+    display: grid;
+    gap: 1rem;
+  }
+
+  .grid-cols-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .card {
+    background: var(--panel);
+    border-radius: 1rem;
+    padding: 1rem;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+  }
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .title {
+    font-size: 1.25rem;
+    font-weight: 700;
+  }
+
+  .subtle {
+    color: var(--muted);
+    font-size: .95rem;
+  }
+
+  .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: end;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    border: 1px solid transparent;
+    padding: .6rem .9rem;
+    border-radius: .75rem;
+    text-decoration: none;
+    color: var(--text);
+    background: #1F2937;
+  }
+
+  .btn:hover {
+    filter: brightness(1.1);
+  }
+
+  .btn:focus {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border-color: #374151;
+  }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0b0f17;
+    font-weight: 700;
+  }
+
+  .btn-outline {
+    background: transparent;
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .period {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    font-weight: 600;
+  }
+
+  .kpis {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .kpi {
+    border: 1px solid #1F2937;
+    padding: 1rem;
+    border-radius: .75rem;
+    background: #0f1623;
+  }
+
+  .kpi h3 {
+    font-size: .9rem;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .kpi strong {
+    font-size: 1.75rem;
+    line-height: 1.2;
+    display: block;
+    margin-top: .25rem;
+  }
+
+  .kpi--total strong {
+    color: var(--accent);
+  }
+
+  .kpi--confirmado strong {
+    color: var(--accent-2);
+  }
+
+  .kpi--cancelado strong {
+    color: var(--accent-4);
+  }
+
+  .kpi--realizado strong {
+    color: var(--accent-3);
+  }
+
+  .filters {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+  }
+
+  .field label {
+    font-weight: 600;
+  }
+
+  .input,
+  .select {
+    background: #0f1623;
+    border: 1px solid #1F2937;
+    color: var(--text);
+    padding: .65rem .8rem;
+    border-radius: .6rem;
+  }
+
+  .input:focus,
+  .select:focus {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  .table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  .thead th {
+    text-align: left;
+    color: var(--muted);
+    font-weight: 700;
+    font-size: .85rem;
+    padding: .4rem .75rem;
+  }
+
+  .tbody tr {
+    background: var(--panel);
+  }
+
+  .tbody td {
+    padding: .9rem .75rem;
+    border-top: 1px solid #1F2937;
+    border-bottom: 1px solid #1F2937;
+  }
+
+  .tbody tr td:first-child {
+    border-left: 1px solid #1F2937;
+    border-top-left-radius: .6rem;
+    border-bottom-left-radius: .6rem;
+  }
+
+  .tbody tr td:last-child {
+    border-right: 1px solid #1F2937;
+    border-top-right-radius: .6rem;
+    border-bottom-right-radius: .6rem;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    font-size: .8rem;
+    border-radius: 999px;
+    padding: .25rem .6rem;
+    border: 1px solid transparent;
+  }
+
+  .badge--confirmado {
+    background: rgba(52, 211, 153, .15);
+    color: #34D399;
+    border-color: rgba(52, 211, 153, .4);
+  }
+
+  .badge--cancelado {
+    background: rgba(248, 113, 113, .15);
+    color: #F87171;
+    border-color: rgba(248, 113, 113, .4);
+  }
+
+  .badge--realizado {
+    background: rgba(245, 158, 11, .15);
+    color: #F59E0B;
+    border-color: rgba(245, 158, 11, .4);
+  }
+
+  .badge--pendente {
+    background: rgba(96, 165, 250, .15);
+    color: #60A5FA;
+    border-color: rgba(96, 165, 250, .4);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+  }
+
+  .skip-link:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    background: var(--accent);
+    color: #000;
+    padding: .5rem .75rem;
+    border-radius: .5rem;
+  }
+
   @media (max-width: 900px) {
-    .kpis { grid-template-columns:repeat(2, minmax(0,1fr)); }
-    .filters { grid-template-columns: 1fr; }
-    .header { flex-direction: column; align-items: stretch; }
+    .kpis {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .filters {
+      grid-template-columns: 1fr;
+    }
+
+    .header {
+      flex-direction: column;
+      align-items: stretch;
+    }
   }
 </style>
 {% endblock %}
@@ -84,7 +332,8 @@
     <header class="header card" aria-labelledby="titulo-pagina">
       <div>
         <h1 id="titulo-pagina" class="title">Agenda do Profissional</h1>
-        <p class="subtle">Gerencie seus agendamentos por semana, com filtros por status e busca por aluno, serviço ou local.</p>
+        <p class="subtle">Gerencie seus agendamentos por semana, com filtros por status e busca por aluno, serviço ou
+          local.</p>
       </div>
       <nav class="row" aria-label="Navegação por semanas">
         <a class="btn btn-ghost" href="{{ prev_url }}" aria-label="Voltar uma semana">◀ Semana anterior</a>
@@ -106,13 +355,14 @@
           <select class="select" id="status" name="status">
             <option value="">Todos</option>
             {% for value, label in status_options %}
-              <option value="{{ value }}" {% if current_status==value %}selected{% endif %}>{{ label }}</option>
+            <option value="{{ value }}" {% if current_status==value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="field">
           <label for="q">Busca (aluno, serviço ou local)</label>
-          <input class="input" type="search" id="q" name="q" value="{{ q or '' }}" placeholder="Ex.: Ana Souza, Avaliação, Sala 203" />
+          <input class="input" type="search" id="q" name="q" value="{{ q or '' }}"
+            placeholder="Ex.: Ana Souza, Avaliação, Sala 203" />
         </div>
         <div class="row">
           <button type="submit" class="btn btn-primary">Aplicar filtros</button>
@@ -162,7 +412,7 @@
             </tr>
           </thead>
           <tbody class="tbody">
-          {% if appointments and appointments|length > 0 %}
+            {% if appointments and appointments|length > 0 %}
             {% for a in appointments %}
             <tr>
               <td>{{ a.student_name }}</td>
@@ -173,25 +423,29 @@
               <td>
                 {% set st = (a.status or '').lower() %}
                 {% if 'confirm' in st %}
-                  <span class="badge badge--confirmado">Confirmado</span>
+                <span class="badge badge--confirmado">Confirmado</span>
                 {% elif 'cancel' in st %}
-                  <span class="badge badge--cancelado">Cancelado</span>
+                <span class="badge badge--cancelado">Cancelado</span>
                 {% elif 'realiz' in st or 'done' in st or 'completed' in st %}
-                  <span class="badge badge--realizado">Realizado</span>
+                <span class="badge badge--realizado">Realizado</span>
                 {% else %}
-                  <span class="badge badge--pendente">Pendente</span>
+                <span class="badge badge--pendente">Pendente</span>
                 {% endif %}
               </td>
               <td>
-                <a class="btn btn-ghost" href="{{ url_for('appointments_detail', id=a.id) }}" aria-label="Ver detalhes do agendamento {{ a.id }}">Detalhes</a>
+                <a class="btn btn-ghost"
+                  href="{{ url_for('appointments_detail', id=a.id) ~ '?' ~ ('return=' ~ request.url.path ~ '?' ~ request.query_params|string)|urlencode }}"
+                  aria-label="Ver detalhes do agendamento {{ a.id }}">
+                  Detalhes
+                </a>
               </td>
             </tr>
             {% endfor %}
-          {% else %}
+            {% else %}
             <tr>
               <td colspan="7" class="subtle">Nenhum agendamento para os filtros selecionados.</td>
             </tr>
-          {% endif %}
+            {% endif %}
           </tbody>
         </table>
       </div>
@@ -205,12 +459,15 @@
   </div>
 </div>
 
-<script>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
   // Acessibilidade: mover foco para o conteúdo quando navegar por semana
   const links = document.querySelectorAll('nav[aria-label="Navegação por semanas"] a, footer[aria-label="Paginação semanal"] a');
   links.forEach(l => l.addEventListener('click', () => {
     const main = document.getElementById('conteudo');
-    if (main) main.setAttribute('tabindex','-1');
+    if (main) main.setAttribute('tabindex', '-1');
   }));
 </script>
 {% endblock %}
