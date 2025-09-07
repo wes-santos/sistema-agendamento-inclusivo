@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Vinculação necessária · Profissional{% endblock %}
+
+{# CSS específico desta página — arquivo estático (CSP-friendly) #}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/notice.css') }}">
+{% endblock %}
+
+{% block content %}
+<main id="notice" role="main" aria-labelledby="notice-title">
+  <section class="notice-card" aria-live="polite">
+    <header class="notice-header">
+      <h1 id="notice-title">Vinculação necessária</h1>
+      <p class="notice-subtle">
+        Seu usuário está com o papel <strong>Profissional</strong>, mas ainda
+        não está vinculado a um cadastro de profissional no sistema.
+      </p>
+    </header>
+
+    <div class="notice-body">
+      <ul class="notice-list">
+        <li>Sem o vínculo, não é possível visualizar sua agenda.</li>
+        <li>Você precisa que a coordenação finalize sua vinculação.</li>
+      </ul>
+
+      {% if link_request_url %}
+        <a class="notice-btn notice-btn-primary" href="{{ link_request_url }}">
+          Solicitar vinculação
+        </a>
+      {% endif %}
+
+      {% if support_email %}
+        <p class="notice-subtle mt-2">
+          Em caso de dúvidas, escreva para <a href="mailto:{{ support_email }}">{{ support_email }}</a>.
+        </p>
+      {% endif %}
+
+      <div class="notice-actions">
+        <a class="notice-btn" href="/">Ir para a página inicial</a>
+      </div>
+    </div>
+  </section>
+</main>
+{% endblock %}
