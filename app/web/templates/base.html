@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
   <script src="{{ url_for('static', path='login.js') }}" defer></script>
+  {% block extra_css %}{% endblock %}
   {% block head %}{% endblock %}
 </head>
 <body>
@@ -49,7 +50,8 @@
       <p><small>© {{ now().year }} Sistema de Agendamento Inclusivo</small></p>
     </div>
   </footer>
-  <script>
+  {% block scripts %}
+  <script nonce="{{ csp_nonce }}">
     // A11y: dialog open/close + focus return
     (function(){
       const openers = document.querySelectorAll('[data-dialog-open]');
@@ -91,5 +93,6 @@
       });
     })();
   </script>
+  {% endblock %}
 </body>
 </html>
