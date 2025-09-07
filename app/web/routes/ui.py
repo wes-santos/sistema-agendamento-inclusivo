@@ -34,6 +34,60 @@ templates.env.cache = {}
 # -------- helpers
 
 
+def _ensure_tz(tz_local: str):
+    from zoneinfo import ZoneInfo
+
+    try:
+        tz = ZoneInfo(tz_local)
+    except Exception:
+        from zoneinfo import ZoneInfo as _ZI
+
+        tz = _ZI("America/Sao_Paulo")
+    return tz
+
+
+def _week_bounds_local(anchor: date, tz) -> tuple[datetime, datetime]:
+    # segunda às 00:00 até segunda seguinte 00:00
+    start_local_date = anchor - timedelta(days=anchor.weekday())
+    start_local = datetime.combine(start_local_date, time.min, tzinfo=tz)
+    end_local = start_local + timedelta(days=7)
+    return start_local, end_local
+
+
+def _fmt_period(d: date) -> str:
+    meses = [
+        "jan",
+        "fev",
+        "mar",
+        "abr",
+        "mai",
+        "jun",
+        "jul",
+        "ago",
+        "set",
+        "out",
+        "nov",
+        "dez",
+    ]
+    return f"{d.day:02d} {meses[d.month-1]} {d.year}"
+
+
+def _status_key(s) -> str:
+    # Normaliza o status para STRING UPPER (compatível com template)
+    try:
+        # Enum: usa .name (SCHEDULED, CONFIRMED, DONE, CANCELLED...)
+        return s.name.upper()
+    except Exception:
+        return str(s or "").strip().upper()
+
+
+def _get_col(model, *names):
+    for n in names:
+        if hasattr(model, n):
+            return getattr(model, n)
+    return None
+
+
 def _make_url_factory(request: Request, page_param: str = "page"):
     def make_url(
         path: str,
@@ -93,7 +147,7 @@ def _status_matches(key: str, needle_list: list[str]) -> bool:
     return any(n in lk for n in needle_list)
 
 
-def build_url(base: str, params: dict) -> str:
+def _build_url(base: str, params: dict) -> str:
     clean = {k: v for k, v in params.items() if v not in (None, "")}
     qs = urlencode(clean, doseq=True)
     return f"{base}?{qs}" if qs else base
@@ -449,14 +503,14 @@ def ui_professional_week(
     prev_start = (start_local - timedelta(days=days)).isoformat()
     next_start = (start_local + timedelta(days=days)).isoformat()
 
-    prev_url = build_url(base_path, {**base_params, "start": prev_start})
-    next_url = build_url(base_path, {**base_params, "start": next_start})
+    prev_url = _build_url(base_path, {**base_params, "start": prev_start})
+    next_url = _build_url(base_path, {**base_params, "start": next_start})
 
     # Limpar filtros (mantém janela/ids)
     clear_params = {"days": days, "start": start_local.isoformat()}
     if current_user.role == Role.COORDINATION:
         clear_params["professional_id"] = int(prof_id)
-    clear_filters_url = build_url(base_path, clear_params)
+    clear_filters_url = _build_url(base_path, clear_params)
 
     # --- Status options para o <select>
     status_options = []
@@ -518,7 +572,7 @@ def ui_professional_week(
 
 
 # -------- Coordenação: overview
-@router.get("/coordination/overview")
+@router.get("/coordination/overview", name="ui_coordination_overview")
 def ui_coordination_overview(
     request: Request,
     current_user: Annotated[User, Depends(require_roles(Role.COORDINATION))],
@@ -529,78 +583,87 @@ def ui_coordination_overview(
     tz_local: str = "America/Sao_Paulo",
     limit_lists: int = Query(default=10, ge=1, le=50),
 ):
-    from zoneinfo import ZoneInfo
+    tz = _ensure_tz(tz_local)
 
-    try:
-        tz = ZoneInfo(tz_local)
-    except Exception:
-        tz = DEFAULT_TZ
-        tz_local = "America/Sao_Paulo"
-
+    # Resolve janela local
     if date_from and date_to:
-        start_local = datetime.combine(date_from, datetime.min.time()).replace(
-            tzinfo=tz
-        )
-        end_local = datetime.combine(date_to, datetime.min.time()).replace(tzinfo=tz)
+        start_local = datetime.combine(date_from, time.min, tzinfo=tz)
+        end_local = datetime.combine(date_to, time.min, tzinfo=tz)
     elif date_from and not date_to:
-        start_local = datetime.combine(date_from, datetime.min.time()).replace(
-            tzinfo=tz
-        )
+        start_local = datetime.combine(date_from, time.min, tzinfo=tz)
         end_local = start_local + timedelta(days=7)
     elif week_start:
-        start_local, end_local = week_bounds_local(week_start, tz)
+        start_local, end_local = _week_bounds_local(week_start, tz)
     else:
         today_local = datetime.now(tz).date()
-        start_local, end_local = week_bounds_local(today_local, tz)
+        start_local, end_local = _week_bounds_local(today_local, tz)
 
-    start_utc = start_local.astimezone(ZoneInfo("UTC"))
-    end_utc = end_local.astimezone(ZoneInfo("UTC"))
+    # UTC bounds (colunas fallback)
+    START_COL = _get_col(Appointment, "starts_at", "starts_at_utc")
+    END_COL = _get_col(Appointment, "ends_at", "ends_at_utc")
+    if START_COL is None or END_COL is None:
+        raise RuntimeError("Appointment precisa de starts_at/ends_at (ou *_utc)")
 
+    start_utc = (
+        start_local.astimezone(datetime.timezone.utc)
+        if hasattr(datetime, "timezone")
+        else start_local
+    )
+    end_utc = (
+        end_local.astimezone(datetime.timezone.utc)
+        if hasattr(datetime, "timezone")
+        else end_local
+    )
+
+    # Contagem por status
     rows = (
         db.query(Appointment.status, func.count(Appointment.id))
-        .filter(
-            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
-        )
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
         .group_by(Appointment.status)
         .all()
     )
-    count_by_status = {s: int(c) for (s, c) in rows}
+    count_by_status = {_status_key(s): int(c) for (s, c) in rows}
     total_appointments = sum(count_by_status.values())
     cancel_rate = (
-        (count_by_status.get(AppointmentStatus.CANCELLED, 0) / total_appointments)
+        (count_by_status.get("CANCELLED", 0) / total_appointments)
         if total_appointments
         else 0.0
     )
 
+    # Profissionais/estudantes ativos
     professionals_active = (
         db.query(func.count(func.distinct(Appointment.professional_id)))
-        .filter(
-            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
-        )
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
         .scalar()
         or 0
     )
     students_active = (
         db.query(func.count(func.distinct(Appointment.student_id)))
-        .filter(
-            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
-        )
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
         .scalar()
         or 0
     )
 
     # Série diária
-    series_map = {}
+    series_map: dict[date, dict[str, int]] = {}
     cur = start_local
     while cur < end_local:
-        series_map[cur.date()] = {s: 0 for s in AppointmentStatus}
+        series_map[cur.date()] = {
+            "SCHEDULED": 0,
+            "CONFIRMED": 0,
+            "DONE": 0,
+            "CANCELLED": 0,
+        }
         cur += timedelta(days=1)
-    for s, dt in db.query(Appointment.status, Appointment.starts_at).filter(
-        and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
+
+    for s, dt in db.query(Appointment.status, START_COL).filter(
+        and_(START_COL >= start_utc, START_COL < end_utc)
     ):
+        s_key = _status_key(s)
         d_local = dt.astimezone(tz).date()
         if d_local in series_map:
-            series_map[d_local][s] = series_map[d_local].get(s, 0) + 1
+            series_map[d_local][s_key] = series_map[d_local].get(s_key, 0) + 1
+
     series_daily = [
         {
             "date_local": d,
@@ -610,12 +673,10 @@ def ui_coordination_overview(
         for d, counts in sorted(series_map.items())
     ]
 
-    # Tops
+    # Top profissionais
     prof_rows = (
         db.query(Appointment.professional_id, func.count(Appointment.id))
-        .filter(
-            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
-        )
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
         .group_by(Appointment.professional_id)
         .order_by(func.count(Appointment.id).desc())
         .limit(limit_lists)
@@ -639,11 +700,10 @@ def ui_coordination_overview(
         for (pid, c) in prof_rows
     ]
 
+    # Top serviços
     svc_rows = (
         db.query(Appointment.service, func.count(Appointment.id))
-        .filter(
-            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
-        )
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
         .group_by(Appointment.service)
         .order_by(func.count(Appointment.id).desc())
         .limit(limit_lists)
@@ -653,32 +713,46 @@ def ui_coordination_overview(
         {"service": s or "(sem descrição)", "count": int(c)} for (s, c) in svc_rows
     ]
 
+    # Recentes
     recent_rows = (
         db.query(Appointment)
-        .filter(
-            and_(Appointment.starts_at >= start_utc, Appointment.starts_at < end_utc)
-        )
-        .order_by(getattr(Appointment, "created_at", Appointment.starts_at).desc())
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
+        .order_by(getattr(Appointment, "created_at", START_COL).desc())
         .limit(limit_lists)
         .all()
     )
-    stud_map = {}
     stud_ids = list({r.student_id for r in recent_rows})
-    if stud_ids:
-        for u in db.query(User).filter(User.id.in_(stud_ids)).all():
-            stud_map[u.id] = getattr(u, "name", None) or getattr(u, "email", None)
-    pro_map = {}
     pro_ids = list({r.professional_id for r in recent_rows})
-    if pro_ids:
-        for u in db.query(User).filter(User.id.in_(pro_ids)).all():
-            pro_map[u.id] = getattr(u, "name", None) or getattr(u, "email", None)
+
+    stud_map = (
+        {
+            u.id: (getattr(u, "name", None) or getattr(u, "email", None))
+            for u in db.query(User).filter(User.id.in_(stud_ids)).all()
+        }
+        if stud_ids
+        else {}
+    )
+    pro_map = (
+        {
+            u.id: (getattr(u, "name", None) or getattr(u, "email", None))
+            for u in db.query(User).filter(User.id.in_(pro_ids)).all()
+        }
+        if pro_ids
+        else {}
+    )
+
+    def _fmt_local(dt):
+        return dt.astimezone(tz).strftime("%d/%m %H:%M") if dt else "-"
+
     recent = [
         {
             "id": r.id,
-            "service": r.service,
-            "status": r.status,
-            "start_at_utc": r.start_at,
-            "start_at_local": r.start_at.astimezone(tz),
+            "service": getattr(r, "service", None),
+            "status": _status_key(getattr(r, "status", None)),
+            "starts_at": getattr(r, "starts_at", getattr(r, "starts_at_utc", None)),
+            "starts_at_str": _fmt_local(
+                getattr(r, "starts_at", getattr(r, "starts_at_utc", None))
+            ),
             "professional_id": r.professional_id,
             "professional_name": pro_map.get(r.professional_id),
             "student_id": r.student_id,
@@ -687,22 +761,43 @@ def ui_coordination_overview(
         for r in recent_rows
     ]
 
+    # Navegação semanal (prev/next)
+    base_path = str(request.url_for("ui_coordination_overview"))
+    prev_week = (start_local.date() - timedelta(days=7)).isoformat()
+    next_week = (start_local.date() + timedelta(days=7)).isoformat()
+
+    prev_url = _build_url(
+        base_path,
+        {"week_start": prev_week, "tz_local": tz_local, "limit_lists": limit_lists},
+    )
+    next_url = _build_url(
+        base_path,
+        {"week_start": next_week, "tz_local": tz_local, "limit_lists": limit_lists},
+    )
+    clear_filters_url = _build_url(
+        base_path, {"week_start": start_local.date().isoformat(), "tz_local": tz_local}
+    )
+
     summary = {
         "window_start_local": start_local.date(),
-        "window_end_local": end_local.date(),
+        "window_end_local": (end_local - timedelta(days=1)).date(),  # inclusivo
         "timezone": tz_local,
+        "period_start_str": _fmt_period(start_local.date()),
+        "period_end_str": _fmt_period((end_local - timedelta(days=1)).date()),
         "total_appointments": total_appointments,
         "count_by_status": count_by_status,
         "cancel_rate": cancel_rate,
         "professionals_active": int(professionals_active),
         "families_active": int(students_active),
-        "today_upcoming": 0,
     }
 
     trail = [
         ("/", "Início"),
         ("/ui/coordination/overview", "Coordenação — Visão geral"),
     ]
+
+    def jinja_url_for(name: str, **params) -> str:
+        return str(request.url_for(name, **params))
 
     return templates.TemplateResponse(
         "coordination_overview.html",
@@ -714,6 +809,11 @@ def ui_coordination_overview(
             "top_professionals": top_professionals,
             "top_services": top_services,
             "recent": recent,
+            "prev_url": prev_url,
+            "next_url": next_url,
+            "clear_filters_url": clear_filters_url,
             "trail": trail,
+            "url_for": jinja_url_for,
+            "csp_nonce": getattr(request.state, "csp_nonce", None),
         },
     )

@@ -86,10 +86,10 @@ class CSPMiddleware(BaseHTTPMiddleware):
 
         csp = (
             "default-src 'self'; "
-            f"style-src 'self' 'nonce-{nonce}'; "
-            "script-src 'self'; "
+            f"style-src 'self' 'nonce-{nonce}' https://fonts.googleapis.com https://use.typekit.net; "
+            f"script-src 'self' 'nonce-{nonce}'; "
             "img-src 'self' data:; "
-            "font-src 'self' data:; "
+            "font-src 'self' data: https://fonts.gstatic.com https://use.typekit.net; "
             "connect-src 'self'; "
             "object-src 'none'; "
             "base-uri 'self'; "

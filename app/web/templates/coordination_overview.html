@@ -1,74 +1,168 @@
 {% extends 'base.html' %}
-{% block title %}Visão geral · Coordenação{% endblock %}
+{% block title %}Coordenação · Visão geral{% endblock %}
+
+{% block extra_css %}
+<style nonce="{{ csp_nonce }}">
+  :root {
+    --bg: #0b0f17; --panel:#111827; --muted:#9CA3AF; --text:#F9FAFB;
+    --a1:#60A5FA; --a2:#34D399; --a3:#F59E0B; --a4:#F87171; --ring:#93C5FD;
+  }
+  @media (prefers-color-scheme: light){
+    :root { --bg:#F3F4F6; --panel:#FFFFFF; --muted:#4B5563; --text:#111827; --ring:#2563EB; }
+  }
+  #co { color:var(--text); }
+  .co-wrap { max-width:1200px; margin:0 auto; padding:1rem; }
+  .co-card { background:var(--panel); border-radius:1rem; padding:1rem; box-shadow:0 10px 20px rgba(0,0,0,.2); }
+  .co-header { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+  .co-title { font-size:1.25rem; font-weight:700; }
+  .co-subtle { color:var(--muted); }
+  .co-row { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; }
+  .co-btn { display:inline-flex; align-items:center; gap:.5rem; border:1px solid #374151; padding:.6rem .9rem; border-radius:.75rem; color:var(--text); text-decoration:none; background:transparent; }
+  .co-btn:focus{ outline:3px solid var(--ring); outline-offset:2px; }
+  .co-kpis { display:grid; gap:1rem; grid-template-columns:repeat(4, minmax(0,1fr)); }
+  .co-kpi h3 { font-size:.9rem; color:var(--muted); margin:0; }
+  .co-kpi strong { font-size:1.75rem; display:block; margin-top:.25rem; }
+  .co-kpi.total strong{ color:var(--a1);} .co-kpi.conf strong{ color:var(--a2);} .co-kpi.done strong{ color:var(--a3);} .co-kpi.cancel strong{ color:var(--a4);} 
+  table.co { width:100%; border-collapse:separate; border-spacing:0 8px; }
+  table.co th { text-align:left; color:var(--muted); font-size:.85rem; padding:.4rem .75rem; }
+  table.co td { padding:.7rem .75rem; background:var(--panel); border:1px solid #1F2937; }
+  table.co tbody tr td:first-child{ border-top-left-radius:.6rem; border-bottom-left-radius:.6rem; }
+  table.co tbody tr td:last-child{ border-top-right-radius:.6rem; border-bottom-right-radius:.6rem; }
+  .co-badge{ display:inline-flex; align-items:center; gap:.4rem; font-size:.8rem; border-radius:999px; padding:.2rem .6rem; border:1px solid transparent; }
+  .b-conf{ background:rgba(52,211,153,.15); color:#34D399; border-color:rgba(52,211,153,.4);} 
+  .b-done{ background:rgba(245,158,11,.15); color:#F59E0B; border-color:rgba(245,158,11,.4);} 
+  .b-canc{ background:rgba(248,113,113,.15); color:#F87171; border-color:rgba(248,113,113,.4);} 
+  .b-sched{ background:rgba(96,165,250,.15); color:#60A5FA; border-color:rgba(96,165,250,.4);} 
+  .mt-2{ margin-top:.5rem; } .mt-4{ margin-top:1rem; }
+  .my-02{ margin-top:.2rem; margin-bottom:.2rem; }
+  .mt-035{ margin-top:.35rem; }
+  .ml-05{ margin-left:.5rem; } .mr-035{ margin-right:.35rem; }
+  .fs-11{ font-size:1.1rem; } .fs-2xl{ font-size:2rem; }
+  .flex-1{ flex:1; }
+  .g-1{ gap:1rem; }
+  .as{ align-items:start; }
+  @media (max-width: 900px){ .co-kpis{ grid-template-columns:repeat(2, minmax(0,1fr)); } .co-header{ flex-direction:column; align-items:stretch; } }
+</style>
+{% endblock %}
 
 {% block content %}
-  <h1>Visão geral</h1>
-  <section class="grid grid-3 mt-4" aria-label="Indicadores">
-    <div class="card"><h2>Total</h2><p style="font-size:2rem; margin:.2rem 0">{{ summary.total_appointments }}</p></div>
-    <div class="card"><h2>Cancelamentos</h2><p style="font-size:2rem; margin:.2rem 0">{{ (summary.cancel_rate*100)|round(1) }}%</p></div>
-    <div class="card"><h2>Hoje (próximos)</h2><p style="font-size:2rem; margin:.2rem 0">{{ summary.today_upcoming }}</p></div>
-  </section>
+<div id="co">
+  <div class="co-wrap">
 
-  <section class="card mt-4" aria-labelledby="series-title">
-    <h2 id="series-title">Série diária</h2>
-    <table class="mt-2">
-      <thead>
-        <tr>
-          <th>Dia</th>
-          <th>Total</th>
-          <th>Agendado</th>
-          <th>Confirmado</th>
-          <th>Concluído</th>
-          <th>Cancelado</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for d in series_daily %}
-          <tr>
-            <td>{{ d.date_local.strftime('%d/%m') }}</td>
-            <td>{{ d.count_total }}</td>
-            <td>{{ d.count_by_status['SCHEDULED'] if 'SCHEDULED' in d.count_by_status else d.count_by_status.get('SCHEDULED', 0) }}</td>
-            <td>{{ d.count_by_status['CONFIRMED'] if 'CONFIRMED' in d.count_by_status else d.count_by_status.get('CONFIRMED', 0) }}</td>
-            <td>{{ d.count_by_status['DONE'] if 'DONE' in d.count_by_status else d.count_by_status.get('DONE', 0) }}</td>
-            <td>{{ d.count_by_status['CANCELLED'] if 'CANCELLED' in d.count_by_status else d.count_by_status.get('CANCELLED', 0) }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </section>
+    <header class="co-card co-header" aria-labelledby="co-title">
+      <div>
+        <h1 id="co-title" class="co-title">Coordenação · Visão geral</h1>
+        <p class="co-subtle">Período: <strong>{{ summary.period_start_str }}</strong> — <strong>{{ summary.period_end_str }}</strong> · {{ summary.timezone }}</p>
+      </div>
+      <nav class="co-row" aria-label="Navegação por semanas">
+        <a class="co-btn" href="{{ prev_url }}" aria-label="Semana anterior">◀ Semana anterior</a>
+        <a class="co-btn" href="{{ next_url }}" aria-label="Semana seguinte">Semana seguinte ▶</a>
+        <a class="co-btn" href="{{ clear_filters_url }}" aria-label="Limpar filtros">Limpar</a>
+      </nav>
+    </header>
 
-  <div class="grid grid-2 mt-4">
-    <section class="card" aria-labelledby="top-prof">
-      <h2 id="top-prof">Top profissionais</h2>
-      <ol>
-        {% for p in top_professionals %}
-          <li class="mt-2">{{ p.professional_name or ('#' ~ p.professional_id) }} — <strong>{{ p.count }}</strong></li>
-        {% endfor %}
-      </ol>
+    <section class="co-card" aria-labelledby="resumo">
+      <h2 id="resumo" class="co-title" class="co-title fs-11">Resumo</h2>
+      <div class="co-kpis" role="list">
+        <div class="co-kpi total" role="listitem">
+          <h3>Total de agendamentos</h3>
+          <strong>{{ summary.total_appointments }}</strong>
+        </div>
+        <div class="co-kpi conf" role="listitem">
+          <h3>Confirmados</h3>
+          <strong>{{ summary.count_by_status.get('CONFIRMED', 0) }}</strong>
+        </div>
+        <div class="co-kpi done" role="listitem">
+          <h3>Realizados</h3>
+          <strong>{{ summary.count_by_status.get('DONE', 0) }}</strong>
+        </div>
+        <div class="co-kpi cancel" role="listitem">
+          <h3>Cancelados</h3>
+          <strong>{{ summary.count_by_status.get('CANCELLED', 0) }}</strong>
+        </div>
+      </div>
+      <p class="co-subtle" class="mt-2">Profissionais ativos: <strong>{{ summary.professionals_active }}</strong> · Famílias atendidas: <strong>{{ summary.families_active }}</strong> · Taxa de cancelamento: <strong>{{ (summary.cancel_rate*100)|round(1) }}%</strong></p>
     </section>
 
-    <section class="card" aria-labelledby="top-svc">
-      <h2 id="top-svc">Top serviços</h2>
-      <ol>
-        {% for s in top_services %}
-          <li class="mt-2">{{ s.service }} — <strong>{{ s.count }}</strong></li>
-        {% endfor %}
-      </ol>
+    <section class="co-card" aria-labelledby="serie">
+      <h2 id="serie" class="co-title" class="fs-11">Série diária</h2>
+      <div class="table-wrapper" tabindex="0" aria-label="Tabela série diária">
+        <table class="co" aria-describedby="serie">
+          <thead>
+            <tr>
+              <th>Dia</th>
+              <th>Total</th>
+              <th>Agendado</th>
+              <th>Confirmado</th>
+              <th>Realizado</th>
+              <th>Cancelado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in series_daily %}
+            <tr>
+              <td>{{ d.date_local.strftime('%d/%m') }}</td>
+              <td>{{ d.count_total }}</td>
+              <td>{{ d.count_by_status.get('SCHEDULED', 0) }}</td>
+              <td>{{ d.count_by_status.get('CONFIRMED', 0) }}</td>
+              <td>{{ d.count_by_status.get('DONE', 0) }}</td>
+              <td>{{ d.count_by_status.get('CANCELLED', 0) }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </section>
-  </div>
 
-  <section class="card mt-4" aria-labelledby="recentes">
-    <h2 id="recentes">Últimos agendamentos</h2>
-    {% if recent %}
+    <div class="co-row g-1 as mt-4">
+      <section class="co-card flex-1" aria-labelledby="top-prof">
+        <h2 id="top-prof" class="co-title fs-11">Top profissionais</h2>
+        {% if top_professionals %}
+        <ol>
+          {% for p in top_professionals %}
+            <li class="mt-035">
+              {{ p.professional_name or ('#' ~ p.professional_id) }} — <strong>{{ p.count }}</strong>
+            </li>
+          {% endfor %}
+        </ol>
+        {% else %}
+          <p class="co-subtle">Sem dados.</p>
+        {% endif %}
+      </section>
+
+      <section class="co-card flex-1" aria-labelledby="top-svc">
+        <h2 id="top-svc" class="co-title fs-11">Top serviços</h2>
+        {% if top_services %}
+        <ol>
+          {% for s in top_services %}
+            <li class="mr-035">{{ s.service }} — <strong>{{ s.count }}</strong></li>
+          {% endfor %}
+        </ol>
+        {% else %}
+          <p class="co-subtle">Sem dados.</p>
+        {% endif %}
+      </section>
+    </div>
+
+    <section class="co-card mt-4" aria-labelledby="recentes">
+      <h2 id="recentes" class="co-title fs-11">Últimos agendamentos</h2>
+      {% if recent %}
       <ul>
         {% for r in recent %}
-          <li class="mt-2">
-            <strong>{{ r.start_at_local.strftime('%d/%m %H:%M') }}</strong> — {{ r.service }} · {{ r.student_name or ('#' ~ r.student_id) }} ({{ r.professional_name or ('#' ~ r.professional_id) }})
+          <li class="mr-035">
+            <span class="co-badge b-sched mr-035" aria-hidden="true"></span>
+            <strong>{{ r.starts_at_str }}</strong> — {{ r.service }} · {{ r.student_name or ('#' ~ r.student_id) }} ({{ r.professional_name or ('#' ~ r.professional_id) }})
+            {% if r.status == 'CONFIRMED' %}<span class="co-badge b-conf ml-05">Confirmado</span>{% endif %}
+            {% if r.status == 'DONE' %}<span class="co-badge b-done ml-05">Realizado</span>{% endif %}
+            {% if r.status == 'CANCELLED' %}<span class="co-badge b-canc ml-05">Cancelado</span>{% endif %}
           </li>
         {% endfor %}
       </ul>
-    {% else %}
-      <p style="color:var(--muted)">Sem itens.</p>
-    {% endif %}
-  </section>
+      {% else %}
+        <p class="co-subtle">Sem itens.</p>
+      {% endif %}
+    </section>
+
+  </div>
+</div>
 {% endblock %}
