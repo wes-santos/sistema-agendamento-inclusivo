@@ -10,7 +10,7 @@ from app.db.base_class import Base
 
 
 class Role(str, enum.Enum):
-    STUDENT = "STUDENT"
+    FAMILY = "FAMILY"
     PROFESSIONAL = "PROFESSIONAL"
     COORDINATION = "COORDINATION"
 

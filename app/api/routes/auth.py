@@ -214,8 +214,8 @@ def only_professional(
     return {"ok": True, "user_role": user.role}
 
 
-@router.get("/only-student")
-def only_student(
-    user: User = Depends(require_roles(Role.STUDENT)),
+@router.get("/only-family")
+def only_family(
+    user: User = Depends(require_roles(Role.FAMILY)),
 ):
     return {"ok": True, "user_role": user.role}

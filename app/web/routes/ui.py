@@ -14,7 +14,7 @@ from app.db import get_db
 from app.deps import require_roles
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.user import Role, User
-from app.schemas.dashboard_student import StudentApptItem, StudentApptSummary
+from app.schemas.dashboard_family import StudentApptItem, StudentApptSummary
 from app.utils.week import DEFAULT_TZ, week_bounds_local
 
 router = APIRouter(prefix="/ui", tags=["ui"])
@@ -46,10 +46,10 @@ def login_page(request: Request):
 
 
 # -------- Família: Meus agendamentos
-@router.get("/student/appointments")
-def ui_student_appointments(
+@router.get("/family/appointments")
+def ui_family_appointments(
     request: Request,
-    current_user: Annotated[User, Depends(require_roles(Role.STUDENT))],
+    current_user: Annotated[User, Depends(require_roles(Role.FAMILY))],
     db: Annotated[Session, Depends(get_db)],
     range: str = Query(default="upcoming", pattern="^(upcoming|past|all)$"),
     status: str | None = Query(default=None),
@@ -156,10 +156,10 @@ def ui_student_appointments(
     )
 
     total_pages = max(1, (total_items + page_size - 1) // page_size)
-    trail = [("/", "Início"), ("/ui/student/appointments", "Meus agendamentos")]
+    trail = [("/", "Início"), ("/ui/family/appointments", "Meus agendamentos")]
 
     return templates.TemplateResponse(
-        "student_my_schedules.html",
+        "family_my_schedules.html",
         {
             "request": request,
             "current_user": current_user,
@@ -228,7 +228,7 @@ def ui_professional_week(
                 "service": ap.service,
                 "status": ap.status,
                 "location": ap.location,
-                "student_name_name": getattr(getattr(ap, "student", None), "name", None)
+                "student_name": getattr(getattr(ap, "student", None), "name", None)
                 or getattr(getattr(ap, "student", None), "email", None),
                 "student_id": ap.student_id,
                 "start_at_local": sl,
