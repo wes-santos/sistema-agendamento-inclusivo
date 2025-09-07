@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Família · Meus agendamentos{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/family.css') }}">
+{% endblock %}
+
+{% block content %}
+<div id="fa">
+  <div class="fa-wrap">
+
+    <header class="fa-card fa-header" aria-labelledby="fa-title">
+      <div>
+        <h1 id="fa-title" class="fa-title">Família · Meus agendamentos</h1>
+        <p class="fa-subtle">Visualize seus próximos, passados ou todos os agendamentos. Filtre por status ou busque por
+          serviço/local.</p>
+      </div>
+      <nav class="fa-row" aria-label="Ações rápidas">
+        <a class="fa-btn" href="{{ clear_filters_url }}">Limpar filtros</a>
+      </nav>
+    </header>
+
+    <section class="fa-card" aria-labelledby="fa-filtros">
+      <h2 id="fa-filtros" class="fa-title fs-11">Filtros</h2>
+      <form method="get" class="fa-filters" action="">
+        <div class="fa-field">
+          <label for="range">Período</label>
+          <select id="range" name="range" class="fa-select">
+            <option value="upcoming" {% if range=='upcoming' %}selected{% endif %}>Próximos</option>
+            <option value="past" {% if range=='past' %}selected{% endif %}>Passados</option>
+            <option value="all" {% if range=='all' %}selected{% endif %}>Todos</option>
+          </select>
+        </div>
+        <div class="fa-field">
+          <label for="status">Status</label>
+          <select id="status" name="status" class="fa-select">
+            <option value="" {% if not status %}selected{% endif %}>Todos</option>
+            <option value="SCHEDULED" {% if status=='SCHEDULED' %}selected{% endif %}>Agendado</option>
+            <option value="CONFIRMED" {% if status=='CONFIRMED' %}selected{% endif %}>Confirmado</option>
+            <option value="DONE" {% if status=='DONE' %}selected{% endif %}>Concluído</option>
+            <option value="CANCELLED" {% if status=='CANCELLED' %}selected{% endif %}>Cancelado</option>
+          </select>
+        </div>
+        <div class="fa-field">
+          <label for="q">Buscar (serviço/local)</label>
+          <input id="q" name="q" class="fa-input" type="search" value="{{ q }}" placeholder="Ex.: fono, sala 2">
+        </div>
+        <div class="fa-row">
+          <button type="submit" class="fa-btn fa-btn-primary">Aplicar</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="fa-card" aria-labelledby="fa-resumo">
+      <h2 id="fa-resumo" class="fa-title fs-11">Resumo</h2>
+      <div class="fa-kpis" role="list">
+        <div class="fa-kpi total" role="listitem">
+          <h3>Total futuros</h3>
+          <strong>{{ summary.total_upcoming }}</strong>
+        </div>
+        <div class="fa-kpi done" role="listitem">
+          <h3>Concluídos</h3>
+          <strong>{{ summary.total_past }}</strong>
+        </div>
+        <div class="fa-kpi cancel" role="listitem">
+          <h3>Cancelados</h3>
+          <strong>{{ summary.total_cancelled }}</strong>
+        </div>
+        <div class="fa-kpi next" role="listitem">
+          <h3>Próximo</h3>
+          <strong>{{ next_appt_str or '—' }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="fa-card" aria-labelledby="fa-lista">
+      <div class="fa-header">
+        <h2 id="fa-lista" class="fa-title fs-11">Agendamentos</h2>
+        <p class="fa-subtle">{{ total_items }} itens · página {{ page }} de {{ total_pages }}</p>
+      </div>
+
+      {% if items and items|length %}
+      <div class="table-wrapper" tabindex="0" aria-label="Tabela de agendamentos">
+        <table class="fa-table" aria-describedby="fa-lista">
+          <thead>
+            <tr>
+              <th scope="col">Data</th>
+              <th scope="col">Serviço</th>
+              <th scope="col">Profissional</th>
+              <th scope="col">Local</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in items %}
+            <tr>
+              <td>
+                {% if it.start_at_local %}
+                {{ it.start_at_local.strftime('%d/%m/%Y %H:%M') }}
+                {% elif it.start_at_utc %}
+                {{ it.start_at_utc.strftime('%d/%m/%Y %H:%M UTC') }}
+                {% else %}-{% endif %}
+              </td>
+              <td>{{ it.service or '—' }}</td>
+              <td>{{ it.professional_name or ('#' ~ it.professional_id) }}</td>
+              <td>{{ it.location or '—' }}</td>
+              <td>
+                {% set st = (it.status.name if it.status and it.status.name else it.status)|string|lower %}
+                {% if 'confirm' in st %}
+                <span class="fa-badge b-conf">Confirmado</span>
+                {% elif 'cancel' in st %}
+                <span class="fa-badge b-canc">Cancelado</span>
+                {% elif 'done' in st or 'concl' in st %}
+                <span class="fa-badge b-done">Concluído</span>
+                {% elif 'sched' in st or 'agend' in st %}
+                <span class="fa-badge b-sched">Agendado</span>
+                {% else %}
+                <span class="fa-badge">—</span>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <nav class="fa-pager" aria-label="Paginação">
+        {% if page_prev_url %}
+        <a class="fa-btn" href="{{ page_prev_url }}">◀ Anterior</a>
+        {% else %}
+        <span class="fa-btn fa-btn-disabled" aria-disabled="true">◀ Anterior</span>
+        {% endif %}
+
+        {% if page_next_url %}
+        <a class="fa-btn" href="{{ page_next_url }}">Próxima ▶</a>
+        {% else %}
+        <span class="fa-btn fa-btn-disabled" aria-disabled="true">Próxima ▶</span>
+        {% endif %}
+      </nav>
+      {% else %}
+      <p class="fa-subtle">Nenhum agendamento encontrado.</p>
+      {% endif %}
+    </section>
+
+  </div>
+</div>
+{% endblock %}

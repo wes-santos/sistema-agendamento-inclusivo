@@ -308,14 +308,13 @@ def ui_family_appointments(
     page_size: int = 10,
     tz_local: str = "America/Sao_Paulo",
 ):
-    from zoneinfo import ZoneInfo
+    tz = _ensure_tz(tz_local)
 
-    try:
-        tz = ZoneInfo(tz_local)
-    except Exception:
-        tz = DEFAULT_TZ
+    # Fallback de colunas (starts_at/ends_at ou *_utc)
+    START_COL = Appointment.starts_at
 
-    now_utc = datetime.now(tz).astimezone(ZoneInfo("UTC"))
+    # Momento agora em UTC-aware para comparação
+    now_utc = datetime.now(UTC)
 
     qbase = (
         db.query(Appointment)
@@ -324,43 +323,55 @@ def ui_family_appointments(
         .filter(Student.guardian_user_id == current_user.id)
     )
 
+    # Filtro de período
     if range == "upcoming":
-        qbase = qbase.filter(Appointment.starts_at >= now_utc)
+        qbase = qbase.filter(START_COL >= now_utc)
     elif range == "past":
-        qbase = qbase.filter(Appointment.starts_at < now_utc)
+        qbase = qbase.filter(START_COL < now_utc)
 
+    # Status (aceita Enum ou str)
     if status:
         try:
             st = AppointmentStatus(status)
             qbase = qbase.filter(Appointment.status == st)
         except Exception:
-            pass
+            qbase = qbase.filter(
+                func.lower(func.cast(Appointment.status, func.TEXT)).like(
+                    f"%{status.lower()}%"
+                )
+            )
 
+    # Date range (se vierem naive, assume UTC-naive)
     if date_from:
-        qbase = qbase.filter(Appointment.starts_at >= date_from)
-
+        if date_from.tzinfo is None:
+            date_from = date_from.replace(tzinfo=UTC)
+        qbase = qbase.filter(START_COL >= date_from)
     if date_to:
-        qbase = qbase.filter(Appointment.starts_at < date_to)
+        if date_to.tzinfo is None:
+            date_to = date_to.replace(tzinfo=UTC)
+        qbase = qbase.filter(START_COL < date_to)
 
+    # Busca (serviço/local) – CORRIGIDO o like
     if q:
-        like = f"${q.strip()}%"
+        like = f"%{q.strip()}%"
         parts = []
-
         if hasattr(Appointment, "service"):
             parts.append(Appointment.service.ilike(like))
         if hasattr(Appointment, "location"):
             parts.append(Appointment.location.ilike(like))
         if parts:
-            from sqlalchemy import or_ as _or
+            qbase = qbase.filter(or_(*parts))
 
-            qbase = qbase.filter(_or(*parts))
+    qbase = qbase.order_by(START_COL.asc())
 
-    qbase = qbase.order_by(Appointment.starts_at.asc())
+    # Paginação
     total_items = qbase.count()
     page = max(1, page)
     page_size = max(1, min(100, page_size))
     items = qbase.offset((page - 1) * page_size).limit(page_size).all()
+    total_pages = max(1, (total_items + page_size - 1) // page_size)
 
+    # Contagem por status (do guardião, sem janela de tempo)
     rows = (
         db.query(Appointment.status, func.count(Appointment.id))
         .join(Student, Appointment.student_id == Student.id)
@@ -368,27 +379,30 @@ def ui_family_appointments(
         .group_by(Appointment.status)
         .all()
     )
-
     count_by_status = {
-        (s.value if isinstance(s, AppointmentStatus) else str(s)): int(c)
-        for (s, c) in rows
+        (s.name if hasattr(s, "name") else str(s)): int(c) for (s, c) in rows
     }
 
+    # Próximo agendamento (não cancelado)
     next_appt = (
         db.query(Appointment)
         .join(Student, Appointment.student_id == Student.id)
         .filter(
             Student.guardian_user_id == current_user.id,
-            Appointment.starts_at >= now_utc,
+            START_COL >= now_utc,
             Appointment.status != AppointmentStatus.CANCELLED,
         )
-        .order_by(Appointment.starts_at.asc())
+        .order_by(START_COL.asc())
         .first()
     )
 
+    next_appt_dt = next_appt.starts_at if next_appt else None
+    next_appt_str = _fmt_local(next_appt_dt, tz) if next_appt_dt else None
+
+    # Builders auxiliares
     def _to_item(ap: Appointment) -> StudentApptItem:
-        starts_utc = ap.starts_at
-        ends_utc = ap.ends_at
+        starts_utc = getattr(ap, "starts_at", getattr(ap, "starts_at_utc", None))
+        ends_utc = getattr(ap, "ends_at", getattr(ap, "ends_at_utc", None))
         prof_name = None
         try:
             prof = getattr(ap, "professional", None)
@@ -396,7 +410,6 @@ def ui_family_appointments(
                 prof_name = getattr(prof, "name", None) or getattr(prof, "email", None)
         except Exception:
             pass
-
         return StudentApptItem(
             id=ap.id,
             service=getattr(ap, "service", None),
@@ -411,35 +424,63 @@ def ui_family_appointments(
         )
 
     summary = StudentApptSummary(
-        total_upcoming=(
-            int(
-                count_by_status.get(AppointmentStatus.SCHEDULED.name, 0)
-                + count_by_status.get(AppointmentStatus.CONFIRMED.name, 0)
-            )
+        total_upcoming=int(
+            count_by_status.get("SCHEDULED", 0) + count_by_status.get("CONFIRMED", 0)
         ),
-        total_past=int(count_by_status.get(AppointmentStatus.DONE.name, 0)),
-        total_cancelled=int(count_by_status.get(AppointmentStatus.CANCELLED.name, 0)),
-        next_appointment_start_utc=next_appt.starts_at if next_appt else None,
+        total_past=int(count_by_status.get("DONE", 0)),
+        total_cancelled=int(count_by_status.get("CANCELLED", 0)),
+        next_appointment_start_utc=(
+            getattr(next_appt, "starts_at", getattr(next_appt, "starts_at_utc", None))
+            if next_appt
+            else None
+        ),
         next_appointment_service=(
             getattr(next_appt, "service", None) if next_appt else None
         ),
     )
 
-    total_pages = max(1, (total_items + page_size - 1) // page_size)
+    # URLs de paginação e limpar
+    base_path = str(request.url_for("ui_family_appointments"))
+    base_params = {
+        "range": range,
+        "status": status or "",
+        "q": q or "",
+        "page_size": page_size,
+        "tz_local": tz.key,
+    }
+    page_prev_url = (
+        _build_url(base_path, {**base_params, "page": page - 1}) if page > 1 else None
+    )
+    page_next_url = (
+        _build_url(base_path, {**base_params, "page": page + 1})
+        if page < total_pages
+        else None
+    )
+    clear_filters_url = _build_url(
+        base_path,
+        {"range": "upcoming", "page": 1, "page_size": page_size, "tz_local": tz.key},
+    )
+
     trail = [("/", "Início"), ("/ui/family/appointments", "Meus agendamentos")]
 
     return templates.TemplateResponse(
-        "family_my_schedules.html",
+        "family_appointments.html",  # novo template (abaixo)
         {
             "request": request,
             "current_user": current_user,
             "items": [_to_item(ap) for ap in items],
             "summary": summary,
+            "next_appt_str": next_appt_str,
             "page": page,
             "page_size": page_size,
             "total_items": total_items,
             "total_pages": total_pages,
-            "make_url": _make_url_factory(request),
+            "page_prev_url": page_prev_url,
+            "page_next_url": page_next_url,
+            "clear_filters_url": clear_filters_url,
+            "range": range,
+            "status": status,
+            "q": q or "",
             "trail": trail,
         },
     )
