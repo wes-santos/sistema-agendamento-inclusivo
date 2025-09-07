@@ -2,10 +2,10 @@
 # Each request is separated by `###`. Keep one blank line between headers and JSON body.
 
 @baseUrl = http://localhost:8000
-@EMAIL = family@example.com
+@EMAIL = coordination@example.com
 @NAME = Weslley Santos
 @PASSWORD = Passw0rd!
-@ROLE = FAMILY
+@ROLE = COORDINATION
 
 ### (Optional) Health check
 GET {{baseUrl}}/healthz
@@ -167,3 +167,33 @@ Content-Type: application/json
   "slot_minutes": 30,
   "location": "Sala 2"
 }
+
+### Criar estudante (FAMILY → cria para si)
+POST http://localhost:8000/students
+Content-Type: application/json
+
+{ "name": "Theodoro Gonçalves Santos" }
+
+### Criar estudante (COORDINATION → indica responsável)
+POST http://localhost:8000/students
+Content-Type: application/json
+
+{ "name": "Weslley Santos", "guardian_user_id": 1 }
+
+### Listar meus estudantes (FAMILY)
+GET http://localhost:8000/students
+
+### Listar estudantes (COORDINATION, opcionalmente filtrando)
+GET http://localhost:8000/students?guardian_user_id=1
+
+### Criar profissional (COORDINATION)
+POST http://localhost:8000/professionals
+Content-Type: application/json
+
+{ "name": "Dra. Ana", "speciality": "Fonoaudiologia", "is_active": true }
+
+### Listar profissionais (todos; por padrão só ativos)
+GET http://localhost:8000/professionals
+
+### Listar incluindo inativos + busca
+GET http://localhost:8000/professionals?include_inactive=true&q=fono

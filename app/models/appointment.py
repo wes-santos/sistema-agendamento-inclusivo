@@ -1,5 +1,6 @@
 from __future__ import annotations
-from datetime import datetime
+
+import datetime as dt
 import enum
 from sqlalchemy import (
     CheckConstraint,
@@ -40,14 +41,23 @@ class Appointment(Base):
         nullable=False,
         default=AppointmentStatus.SCHEDULED,
     )
-    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-
-    created_at: Mapped[datetime] = mapped_column(
+    starts_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    updated_at: Mapped[datetime] = mapped_column(
+    ends_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
+    )
+
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: dt.datetime.now(tz=dt.UTC),
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: dt.datetime.now(tz=dt.UTC),
+        onupdate=lambda: dt.datetime.now(tz=dt.UTC),
     )
 
     student = relationship("Student")

@@ -94,7 +94,7 @@ def step2_review(
     db: Session = Depends(get_db),
 ):
     prof = _load_professional(db, payload.professional_id)
-    student = _ensure_family_permission(db, current_user, payload.family_id)
+    student = _ensure_family_permission(db, current_user, payload.student_id)
 
     start_utc = _parse_start(payload.starts_at_iso)
     ok, reason = validate_slot(
@@ -144,6 +144,7 @@ def create_appointment(
         ends_at=end_utc,
         status=AppointmentStatus.SCHEDULED,
         location=payload.location,
+        service=prof.speciality,
     )
     db.add(ap)
     db.flush()  # tenta obter id cedo

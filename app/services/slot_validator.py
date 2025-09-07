@@ -23,7 +23,7 @@ def validate_slot(
         .all()
     )
     day_avs = [
-        (a.start_utc, a.end_utc) for a in avs if a.weekday == start_utc.weekday()
+        (a.starts_utc, a.ends_utc) for a in avs if a.weekday == start_utc.weekday()
     ]
     if not day_avs:
         return False, "Fora do horário de atendimento."
@@ -40,8 +40,8 @@ def validate_slot(
             and_(
                 Appointment.professional_id == professional_id,
                 Appointment.status != AppointmentStatus.CANCELLED,
-                Appointment.starts_at_utc < end_utc,
-                Appointment.ends_at_utc > start_utc,
+                Appointment.starts_at < end_utc,
+                Appointment.ends_at > start_utc,
             )
         )
         .all()

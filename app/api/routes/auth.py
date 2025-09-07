@@ -18,7 +18,7 @@ from app.core.settings import settings
 from app.deps import get_current_user, get_db, require_roles
 from app.models.user import Role, User
 from app.schemas.auth import LoginIn, LoginOut
-from app.schemas.user import UserCreate, UserOut
+from app.schemas.users import UserCreate, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
