@@ -17,14 +17,17 @@ from starlette.responses import JSONResponse
 import app.db.base
 from app.api.routes.appointments_wizard import router as appt_wizard_router
 from app.api.routes.auth import router as auth_router
+from app.api.routes.availability import router as availability_router
 from app.api.routes.dashboard_coordination import (
     router as dashboard_coordination_router,
 )
+from app.api.routes.dashboard_family import router as dashboard_family_router
 from app.api.routes.dashboard_professional import (
     router as dashboard_professional_router,
 )
-from app.api.routes.dashboard_family import router as dashboard_family_router
+from app.api.routes.professionals import router as professionals_router
 from app.api.routes.slots import router as slots_router
+from app.api.routes.students import router as students_router
 from app.core.logging import configure_logging, get_logger
 from app.core.settings import settings
 from app.deps import get_current_user
@@ -128,6 +131,9 @@ app.include_router(dashboard_coordination_router)
 app.include_router(ui_router)
 app.include_router(slots_router)
 app.include_router(appt_wizard_router)
+app.include_router(professionals_router)
+app.include_router(students_router)
+app.include_router(availability_router)
 
 
 # --- Endpoints
