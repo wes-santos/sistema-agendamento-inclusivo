@@ -6,7 +6,7 @@ from typing import Annotated, Any
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import and_, func, not_, or_
 from sqlalchemy.orm import Session, joinedload
@@ -153,10 +153,144 @@ def _build_url(base: str, params: dict) -> str:
     return f"{base}?{qs}" if qs else base
 
 
+def _fmt_local(dtval: datetime | None, tz):
+    if not isinstance(dtval, datetime):
+        return "-"
+    if dtval.tzinfo is None:
+        dtval = dtval.replace(tzinfo=UTC)
+    return dtval.astimezone(tz).strftime("%d/%m/%Y %H:%M")
+
+
 # -------- login (mínimo)
 @router.get("/login")
 def login_page(request: Request):
     return templates.TemplateResponse("login.html", {"request": request})
+
+
+# -------- Detalhe do agendamento (profissional/coordenação)
+@router.get("/appointments/{id}", name="appointments_detail")
+def appointments_detail(
+    request: Request,
+    current_user: Annotated[
+        User, Depends(require_roles(Role.PROFESSIONAL, Role.COORDINATION))
+    ],
+    db: Annotated[Session, Depends(get_db)],
+    id: int = Path(..., ge=1),
+    tz_local: str = Query(default="America/Sao_Paulo"),
+    return_url: str | None = Query(
+        default=None, description="URL para voltar (opcional)"
+    ),
+):
+    tz = _ensure_tz(tz_local)
+
+    # Carrega o agendamento + aluno (se existir relação)
+    ap: Appointment | None = (
+        db.query(Appointment)
+        .options(joinedload(getattr(Appointment, "student", None)))
+        .filter(Appointment.id == id)
+        .one_or_none()
+    )
+    if not ap:
+        raise HTTPException(status_code=404, detail="Agendamento não encontrado.")
+
+    # Gate de autorização: PROF só vê os seus
+    if current_user.role == Role.PROFESSIONAL:
+        prof = (
+            db.query(Professional)
+            .filter(Professional.user_id == current_user.id)
+            .one_or_none()
+        )
+        if not prof or ap.professional_id != prof.id:
+            raise HTTPException(
+                status_code=403, detail="Sem permissão para este agendamento."
+            )
+
+    # Datas/hora
+    s_utc = ap.starts_at
+    e_utc = ap.ends_at
+    starts_at_str = _fmt_local(s_utc, tz)
+    ends_at_str = _fmt_local(e_utc, tz)
+
+    # Duração (min)
+    duration_min = None
+    if isinstance(s_utc, datetime) and isinstance(e_utc, datetime):
+        s = s_utc if s_utc.tzinfo else s_utc.replace(tzinfo=UTC)
+        e = e_utc if e_utc.tzinfo else e_utc.replace(tzinfo=UTC)
+        duration_min = int((e - s).total_seconds() // 60)
+
+    # Nomes
+    student_name = getattr(getattr(ap, "student", None), "name", None)
+    # Se quiser exibir nome do profissional, pode buscar por join/lookup de User:
+    # professional_name = db.query(User).get(ap.professional_id)?.name (ajuste conforme seu modelo)
+
+    # Voltar: se veio return_url use-o; senão, volta para a semana do agendamento
+    if return_url and return_url.startswith("/"):
+        back_url = return_url
+    else:
+        base_week = str(request.url_for("ui_professional_week"))
+        # calcula a semana do agendamento (no fuso local)
+        if isinstance(s_utc, datetime):
+            s_local = s_utc if s_utc.tzinfo else s_utc.replace(tzinfo=UTC)
+            s_local = s_local.astimezone(tz)
+            week_start = (
+                s_local.date() - timedelta(days=s_local.date().weekday())
+            ).isoformat()
+        else:
+            # fallback: volta para a semana atual
+            week_start = datetime.now(tz).date().isoformat()
+
+        params = {"start": week_start, "tz_local": tz.key}
+        # Se for coordenação e a UI usa professional_id na query, preserve:
+        if current_user.role == Role.COORDINATION:
+            params["professional_id"] = ap.professional_id
+        back_url = _build_url(base_week, params)
+
+    # Mapeia status → badge
+    raw_status = getattr(ap, "status", None)
+    st_lower = (str(raw_status) or "").lower()
+    if "confirm" in st_lower:
+        status_label = "Confirmado"
+        status_kind = "confirmado"
+    elif "cancel" in st_lower:
+        status_label = "Cancelado"
+        status_kind = "cancelado"
+    elif any(k in st_lower for k in ("realiz", "done", "complet")):
+        status_label = "Realizado"
+        status_kind = "realizado"
+    else:
+        status_label = "Pendente"
+        status_kind = "pendente"
+
+    # Campos opcionais
+    notes = getattr(ap, "notes", None)
+    service = getattr(ap, "service", None)
+    location = getattr(ap, "location", None)
+    created_at = _fmt_local(getattr(ap, "created_at", None), tz)
+    updated_at = _fmt_local(getattr(ap, "updated_at", None), tz)
+
+    return templates.TemplateResponse(
+        "appointment_detail.html",
+        {
+            "request": request,
+            "csp_nonce": getattr(request.state, "csp_nonce", None),
+            "appointment": {
+                "id": ap.id,
+                "status_label": status_label,
+                "status_kind": status_kind,  # para badge
+                "service": service,
+                "location": location,
+                "student_name": student_name,
+                "professional_id": ap.professional_id,
+                "starts_at_str": starts_at_str,
+                "ends_at_str": ends_at_str,
+                "duration_min": duration_min,
+                "created_at": created_at,
+                "updated_at": updated_at,
+                "raw_status": str(raw_status),
+            },
+            "back_url": back_url,
+        },
+    )
 
 
 # -------- Família: Meus agendamentos
