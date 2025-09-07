@@ -1,7 +1,8 @@
 # app/api/routes/professionals.py
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
 from app.audit.helpers import record_audit
@@ -82,3 +83,58 @@ def get_professional(
     return ProfessionalOut(
         id=p.id, name=p.name, speciality=p.speciality, is_active=p.is_active
     )
+
+
+@router.put(
+    "/{professional_id}/link-user/{user_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def link_user_to_professional(
+    professional_id: int,
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(Role.COORDINATION)),
+):
+    prof = db.get(Professional, professional_id)
+    if not prof:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profissional não encontrado")
+    user = db.get(User, user_id)
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Usuário não encontrado")
+    if user.role != Role.PROFESSIONAL:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Usuário não possui papel PROFESSIONAL"
+        )
+
+    # já vinculado a outro?
+    in_use = (
+        db.query(Professional)
+        .filter(
+            and_(Professional.user_id == user_id, Professional.id != professional_id)
+        )
+        .first()
+    )
+    if in_use:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Este usuário já está vinculado a outro profissional",
+        )
+
+    prof.user_id = user_id
+    db.add(prof)
+    db.commit()
+    return
+
+
+@router.delete("/{professional_id}/link-user", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_user_from_professional(
+    professional_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(Role.COORDINATION)),
+):
+    prof = db.get(Professional, professional_id)
+    if not prof:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Profissional não encontrado")
+    prof.user_id = None
+    db.add(prof)
+    db.commit()
+    return

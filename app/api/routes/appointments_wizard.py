@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,10 @@ from app.schemas.appointments import (
     Step1CheckOut,
     Step2ReviewIn,
     Step2ReviewOut,
+)
+from app.services.appointment_notify import (
+    create_tokens_for_appointment,
+    send_confirmation_email_bg,
 )
 from app.services.slot_validator import validate_slot
 from app.utils.tz import iso_utc
@@ -119,6 +123,7 @@ def step2_review(
 def create_appointment(
     payload: CreateAppointmentIn,
     request: Request,
+    background_tasks: BackgroundTasks,
     current_user: Annotated[
         User, Depends(require_roles(Role.FAMILY, Role.COORDINATION))
     ],
@@ -149,6 +154,12 @@ def create_appointment(
     db.add(ap)
     db.flush()  # tenta obter id cedo
 
+    guardian = db.get(User, student.guardian_user_id)
+
+    confirm_token, cancel_token = create_tokens_for_appointment(
+        db, ap, email=guardian.email, hours=48
+    )
+
     # audit junto na mesma transação
     record_audit(
         db,
@@ -172,6 +183,15 @@ def create_appointment(
         raise
 
     db.refresh(ap)
+
+    background_tasks.add_task(
+        send_confirmation_email_bg,
+        ap.id,
+        guardian.id,
+        str(confirm_token),
+        str(cancel_token),
+    )
+
     return AppointmentOut(
         id=ap.id,
         professional_id=ap.professional_id,

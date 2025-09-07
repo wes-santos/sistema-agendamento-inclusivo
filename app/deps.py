@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from urllib.parse import quote
 
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
@@ -55,12 +56,19 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User:  
 
 
 def require_roles(*allowed: Role) -> Callable[[Request, Session], User]:
-    def wrapper(request: Request, db: Session = Depends(get_db)) -> User:  # noqa: B008
+    def _wrapper(request: Request, db: Session = Depends(get_db)) -> User:  # noqa: B008
+        # uid = request.session.get("user_id")
+        # if not uid:
+        #     next_url = quote(str(request.url), safe="")
+        #     raise HTTPException(
+        #         status_code=status.HTTP_303_SEE_OTHER,
+        #         headers={"Location": f"/ui/login?next={next_url}"},
+        #     )
         user = get_current_user(request, db)
-        if user.role not in allowed:
+        if allowed and user.role not in allowed:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN, detail="Sem permissão"
             )
         return user
 
-    return wrapper
+    return _wrapper

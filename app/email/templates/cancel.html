@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="pt-br">
+  <body style="font-family:system-ui,Segoe UI,Roboto,Arial;line-height:1.4">
+    <h2>Cancelar agendamento</h2>
+    <p>Olá {{ guardian_name }},</p>
+    <p>Para cancelar o atendimento de <strong>{{ student_name }}</strong> em <strong>{{ starts_local }}</strong>,
+       utilize o botão abaixo.</p>
+    <p>
+      <a href="{{ cancel_url }}" style="background:#B42318;color:white;padding:10px 16px;text-decoration:none;border-radius:6px">
+        Cancelar agendamento
+      </a>
+    </p>
+    <p style="font-size:12px;color:#666">Este link expira em {{ expires_human }}.</p>
+  </body>
+</html>

@@ -16,6 +16,7 @@ from app.core.security import (
 )
 from app.core.settings import settings
 from app.deps import get_current_user, get_db, require_roles
+from app.models.professional import Professional
 from app.models.user import Role, User
 from app.schemas.auth import LoginIn, LoginOut
 from app.schemas.users import UserCreate, UserOut
@@ -82,9 +83,24 @@ def register_user(payload: UserCreate, db: Session = Depends(get_db)):  # noqa: 
         password_hash=hash_password(payload.password),
         role=payload.role,
     )
+
+    prof = None
+    if user.role == Role.PROFESSIONAL and payload.professional_id is None:
+        prof = Professional(
+            name=user.name or user.email.split("@")[0],
+            speciality=None,
+            is_active=True,
+            user_id=user.id,
+        )
+        db.add(prof)
+
     db.add(user)
     db.commit()
     db.refresh(user)
+
+    if prof:
+        db.refresh(prof)
+
     return user
 
 

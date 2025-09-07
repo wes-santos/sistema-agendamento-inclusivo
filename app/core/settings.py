@@ -1,3 +1,4 @@
+import os
 from enum import Enum
 
 from pydantic import BaseModel
@@ -38,6 +39,15 @@ class Settings(BaseSettings):
 
     # In prod, keep cookies secure-only
     SECURE_COOKIES: bool = False
+
+    MAIL_HOST: str = os.getenv("MAIL_HOST", "localhost")
+    MAIL_PORT: int = int(os.getenv("MAIL_PORT", "1025"))
+    MAIL_TLS: bool = os.getenv("MAIL_TLS", "false").lower() == "true"
+    MAIL_USER: str = os.getenv("MAIL_USER", "")
+    MAIL_PASS: str = os.getenv("MAIL_PASS", "")
+    MAIL_FROM: str = os.getenv("MAIL_FROM", "no-reply@sai.local")
+    MAIL_FROM_NAME: str = os.getenv("MAIL_FROM_NAME", "SAI")
+    APP_PUBLIC_BASE_URL: str = os.getenv("APP_PUBLIC_BASE_URL", "http://localhost:8000")
 
     model_config = SettingsConfigDict(
         env_file=".env.dev",

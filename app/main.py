@@ -26,9 +26,11 @@ from app.api.routes.dashboard_professional import (
     router as dashboard_professional_router,
 )
 from app.api.routes.professionals import router as professionals_router
+from app.api.routes.public_appointments import router as public_appt_router
 from app.api.routes.slots import router as slots_router
 from app.api.routes.students import router as students_router
 from app.core.logging import configure_logging, get_logger
+from app.core.security import CSPMiddleware
 from app.core.settings import settings
 from app.deps import get_current_user
 from app.middlewares.telemetry import RequestContextMiddleware
@@ -122,6 +124,7 @@ app.add_middleware(
         os.getenv("SECURE_COOKIES", "false").lower() == "true"
     ),  # true em produção HTTPS
 )
+app.add_middleware(CSPMiddleware)
 
 
 app.include_router(auth_router)
@@ -134,6 +137,7 @@ app.include_router(appt_wizard_router)
 app.include_router(professionals_router)
 app.include_router(students_router)
 app.include_router(availability_router)
+app.include_router(public_appt_router)
 
 
 # --- Endpoints
