@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 from app.db import get_db
 from app.deps import require_roles
 from app.models.appointment import Appointment, AppointmentStatus
+from app.models.student import Student
 from app.models.user import Role, User
-from app.schemas.dashboard_student import (
+from app.schemas.dashboard_family import (
     StudentApptItem,
     StudentApptResponse,
     StudentApptSummary,
@@ -26,7 +27,7 @@ RangeType = Annotated[
 
 @router.get("/appointments", response_model=StudentApptResponse)
 def list_my_appointments(  # noqa: PLR0913
-    current_user: User = Depends(require_roles(Role.STUDENT)),
+    current_user: User = Depends(require_roles(Role.FAMILY)),
     db: Session = Depends(get_db),
     range: RangeType = "upcoming",
     status: list[AppointmentStatus] | None = Query(
@@ -48,7 +49,7 @@ def list_my_appointments(  # noqa: PLR0913
     ),
 ):
     # Monta filtros base
-    now_utc = datetime.utcnow().astimezone()
+    now_utc = datetime.now(UTC).astimezone()
     conds = [Appointment.student_id == current_user.id]
 
     if range == "upcoming":
@@ -86,7 +87,8 @@ def list_my_appointments(  # noqa: PLR0913
     # counts
     base = (
         db.query(Appointment.status, func.count(Appointment.id))
-        .filter(Appointment.student_id == current_user.id)
+        .join(Student, Appointment.student_id == Student.id)
+        .filter(Student.guardian_user_id == current_user.id)
         .group_by(Appointment.status)
         .all()
     )
@@ -97,8 +99,9 @@ def list_my_appointments(  # noqa: PLR0913
     # próximo agendamento
     next_appt = (
         db.query(Appointment)
+        .join(Student, Appointment.student_id == Student.id)
         .filter(
-            Appointment.student_id == current_user.id,
+            Student.guardian_user_id == current_user.id,
             Appointment.starts_at >= now_utc,
             Appointment.status != AppointmentStatus.CANCELLED,
         )

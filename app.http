@@ -2,10 +2,10 @@
 # Each request is separated by `###`. Keep one blank line between headers and JSON body.
 
 @baseUrl = http://localhost:8000
-@EMAIL = student@example.com
+@EMAIL = family@example.com
 @NAME = Weslley Santos
 @PASSWORD = Passw0rd!
-@ROLE = STUDENT
+@ROLE = FAMILY
 
 ### (Optional) Health check
 GET {{baseUrl}}/healthz
@@ -63,8 +63,8 @@ POST {{baseUrl}}/auth/logout
 
 # ---- Optional protected routes (only if your app includes them) ----
 
-### Protected: STUDENT only
-GET {{baseUrl}}/auth/only-student
+### Protected: FAMILY only
+GET {{baseUrl}}/auth/only-family
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
 ### Protected: PROFESSIONAL
@@ -85,17 +85,17 @@ Authorization: Bearer <ACCESS_TOKEN>
 POST {{baseUrl}}/auth/refresh
 Authorization: Bearer <REFRESH_TOKEN>
 
-### Dashboard Student: List My Appointments
+### Dashboard Family: List My Appointments
 
-GET {{baseUrl}}/dashboard/student/appointments?range=upcoming&page=1&page_size=10
+GET {{baseUrl}}/dashboard/family/appointments?range=upcoming&page=1&page_size=10
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
 ### 
-GET {{baseUrl}}/dashboard/student/appointments?range=past&status=DONE
+GET {{baseUrl}}/dashboard/family/appointments?range=past&status=DONE
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
 ###
-GET {{baseUrl}}/dashboard/student/appointments?date_from=2025-09-01T00:00:00Z&date_to=2025-09-30T23:59:59Z&q=fono
+GET {{baseUrl}}/dashboard/family/appointments?date_from=2025-09-01T00:00:00Z&date_to=2025-09-30T23:59:59Z&q=fono
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 
 ### Professional Dashboard: My Schedule
@@ -123,3 +123,47 @@ Authorization: Bearer {{login_bearer.response.body.$.access_token}}
 ### Janela arbitrária (ex.: 2025-09-01 até 2025-09-15):
 GET {{baseUrl}}/dashboard/coordination/overview?date_from=2025-09-01&date_to=2025-09-15
 Authorization: Bearer {{login_bearer.response.body.$.access_token}}
+
+### List Slots for Professional on a given date
+### Ex.: Profissional 10, dia 2025-09-10, slots de 30 minutos, fuso horário America/Sao_Paulo
+### (substitua o ID do profissional conforme necessário)
+GET http://localhost:8000/slots?professional_id=10&date=2025-09-10&slot_minutes=30
+
+### Slots em horário local (BR por padrão)
+GET http://localhost:8000/slots/local?professional_id=10&date=2025-09-10&slot_minutes=30
+
+### Slots em outra TZ (ex.: America/Manaus)
+GET http://localhost:8000/slots/local?professional_id=10&date=2025-09-10&slot_minutes=30&tz_local=America/Manaus
+
+### PASSO 1 — validar slot
+POST http://localhost:8000/appointments/step1
+Content-Type: application/json
+
+{
+  "professional_id": 1,
+  "starts_at_iso": "2025-09-10T14:00:00Z",
+  "slot_minutes": 30
+}
+
+### PASSO 2 — revisar (retorna nomes, etc.)
+POST http://localhost:8000/appointments/step2
+Content-Type: application/json
+
+{
+  "professional_id": 1,
+  "student_id": 1,
+  "starts_at_iso": "2025-09-10T14:00:00Z",
+  "slot_minutes": 30
+}
+
+### PASSO 3 — confirmar (cria)
+POST http://localhost:8000/appointments
+Content-Type: application/json
+
+{
+  "professional_id": 1,
+  "student_id": 1,
+  "starts_at_iso": "2025-09-10T14:00:00Z",
+  "slot_minutes": 30,
+  "location": "Sala 2"
+}

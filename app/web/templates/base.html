@@ -17,8 +17,8 @@
     <nav class="navbar container" aria-label="Principal">
       <ul class="nav">
         <li><a class="nav-link" href="/" {% if request and request.url.path=='/' %}aria-current="page"{% endif %}>Início</a></li>
-        {% if current_user and current_user.role == Role.STUDENT %}
-        <li><a class="nav-link" href="/ui/student/appointments" {% if request and request.url.path.startswith('/ui/student') %}aria-current="page"{% endif %}>Estudante</a></li>
+        {% if current_user and current_user.role == Role.FAMILY %}
+        <li><a class="nav-link" href="/ui/family/appointments" {% if request and request.url.path.startswith('/ui/family') %}aria-current="page"{% endif %}>Família</a></li>
         {% endif %}
         {% if current_user and current_user.role == Role.PROFESSIONAL %}
         <li><a class="nav-link" href="/ui/professional/week" {% if request and request.url.path.startswith('/ui/professional') %}aria-current="page"{% endif %}>Especialista</a></li>
