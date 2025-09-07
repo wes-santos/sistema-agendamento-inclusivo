@@ -1,18 +1,22 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-from typing import Annotated
+from collections.abc import Iterable, Mapping
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Annotated, Any
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import and_, func, not_, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from starlette.datastructures import URL
 
 from app.db import get_db
 from app.deps import require_roles
 from app.models.appointment import Appointment, AppointmentStatus
+from app.models.professional import Professional
+from app.models.student import Student
 from app.models.user import Role, User
 from app.schemas.dashboard_family import StudentApptItem, StudentApptSummary
 from app.utils.week import DEFAULT_TZ, week_bounds_local
@@ -31,12 +35,68 @@ templates.env.cache = {}
 
 
 def _make_url_factory(request: Request, page_param: str = "page"):
-    def make_url(p: int) -> str:
-        qp = dict(request.query_params)
-        qp[page_param] = str(p)
-        return str(URL(str(request.url)).replace_query_params(**qp))
+    def make_url(
+        path: str,
+        params: Mapping[str, Any] | None = None,
+        *,
+        keep: Iterable[str] | None = None,
+        **kwargs,
+    ) -> str:
+        base = str(request.base_url).rstrip("/")
+        query = {}
+
+        if keep:
+            current = dict(request.query_params)
+            query.update({k: v for k, v in current.items() if k in set(keep)})
+
+        if params:
+            query.update({k: v for k, v in params.items() if v is not None})
+
+        if kwargs:
+            query.update({k: v for k, v in kwargs.items() if v is not None})
+
+        qs = ("?" + urlencode(query, doseq=True)) if query else ""
+        return f"{base}{path}{qs}"
 
     return make_url
+
+
+def _fmt_dt_local(dt: datetime | None, tz: ZoneInfo) -> str:
+    if not dt:
+        return "-"
+    d = dt.astimezone(tz)
+    # Ex.: 02/09/2025 14:30
+    return d.strftime("%d/%m/%Y %H:%M")
+
+
+def _period_str(d: date) -> str:
+    # Ex.: 01 set 2025
+    meses = [
+        "jan",
+        "fev",
+        "mar",
+        "abr",
+        "mai",
+        "jun",
+        "jul",
+        "ago",
+        "set",
+        "out",
+        "nov",
+        "dez",
+    ]
+    return f"{d.day:02d} {meses[d.month-1]} {d.year}"
+
+
+def _status_matches(key: str, needle_list: list[str]) -> bool:
+    lk = key.lower()
+    return any(n in lk for n in needle_list)
+
+
+def build_url(base: str, params: dict) -> str:
+    clean = {k: v for k, v in params.items() if v not in (None, "")}
+    qs = urlencode(clean, doseq=True)
+    return f"{base}?{qs}" if qs else base
 
 
 # -------- login (mínimo)
@@ -69,54 +129,68 @@ def ui_family_appointments(
 
     now_utc = datetime.now(tz).astimezone(ZoneInfo("UTC"))
 
-    conds = [Appointment.student_id == current_user.id]
+    qbase = (
+        db.query(Appointment)
+        .join(Student, Appointment.student_id == Student.id)
+        .options(joinedload(Appointment.student), joinedload(Appointment.professional))
+        .filter(Student.guardian_user_id == current_user.id)
+    )
+
     if range == "upcoming":
-        conds.append(Appointment.starts_at >= now_utc)
+        qbase = qbase.filter(Appointment.starts_at >= now_utc)
     elif range == "past":
-        conds.append(Appointment.starts_at < now_utc)
+        qbase = qbase.filter(Appointment.starts_at < now_utc)
 
     if status:
         try:
             st = AppointmentStatus(status)
-            conds.append(Appointment.status == st)
+            qbase = qbase.filter(Appointment.status == st)
         except Exception:
             pass
 
     if date_from:
-        conds.append(Appointment.starts_at >= date_from)
+        qbase = qbase.filter(Appointment.starts_at >= date_from)
+
     if date_to:
-        conds.append(Appointment.starts_at < date_to)
+        qbase = qbase.filter(Appointment.starts_at < date_to)
 
     if q:
-        like = f"%{q}%"
-        conds.append(
-            or_(Appointment.service.ilike(like), Appointment.location.ilike(like))
-        )
+        like = f"${q.strip()}%"
+        parts = []
 
-    qbase = (
-        db.query(Appointment).filter(and_(*conds)).order_by(Appointment.starts_at.asc())
-    )
+        if hasattr(Appointment, "service"):
+            parts.append(Appointment.service.ilike(like))
+        if hasattr(Appointment, "location"):
+            parts.append(Appointment.location.ilike(like))
+        if parts:
+            from sqlalchemy import or_ as _or
+
+            qbase = qbase.filter(_or(*parts))
+
+    qbase = qbase.order_by(Appointment.starts_at.asc())
     total_items = qbase.count()
     page = max(1, page)
     page_size = max(1, min(100, page_size))
     items = qbase.offset((page - 1) * page_size).limit(page_size).all()
 
-    # Summary (simplificado)
     rows = (
         db.query(Appointment.status, func.count(Appointment.id))
-        .filter(Appointment.student_id == current_user.id)
+        .join(Student, Appointment.student_id == Student.id)
+        .filter(Student.guardian_user_id == current_user.id)
         .group_by(Appointment.status)
         .all()
     )
+
     count_by_status = {
-        s.value if isinstance(s, AppointmentStatus) else str(s): int(c)
+        (s.value if isinstance(s, AppointmentStatus) else str(s)): int(c)
         for (s, c) in rows
     }
 
     next_appt = (
         db.query(Appointment)
+        .join(Student, Appointment.student_id == Student.id)
         .filter(
-            Appointment.student_id == current_user.id,
+            Student.guardian_user_id == current_user.id,
             Appointment.starts_at >= now_utc,
             Appointment.status != AppointmentStatus.CANCELLED,
         )
@@ -125,34 +199,42 @@ def ui_family_appointments(
     )
 
     def _to_item(ap: Appointment) -> StudentApptItem:
+        starts_utc = ap.starts_at
+        ends_utc = ap.ends_at
         prof_name = None
         try:
-            prof_name = getattr(ap.professional, "name", None) or getattr(
-                ap.professional, "email", None
-            )
+            prof = getattr(ap, "professional", None)
+            if prof is not None:
+                prof_name = getattr(prof, "name", None) or getattr(prof, "email", None)
         except Exception:
             pass
+
         return StudentApptItem(
             id=ap.id,
-            service=ap.service,
+            service=getattr(ap, "service", None),
             status=ap.status,
-            start_at_utc=ap.starts_at,
-            end_at_utc=ap.end_at,
-            start_at_local=ap.starts_at.astimezone(tz),
-            end_at_local=ap.end_at.astimezone(tz),
-            location=ap.location,
+            start_at_utc=starts_utc,
+            end_at_utc=ends_utc,
+            start_at_local=(starts_utc.astimezone(tz) if (tz and starts_utc) else None),
+            end_at_local=(ends_utc.astimezone(tz) if (tz and ends_utc) else None),
+            location=getattr(ap, "location", None),
             professional_id=ap.professional_id,
             professional_name=prof_name,
         )
 
     summary = StudentApptSummary(
-        total_upcoming=int(
-            count_by_status.get("SCHEDULED", 0) + count_by_status.get("CONFIRMED", 0)
+        total_upcoming=(
+            int(
+                count_by_status.get(AppointmentStatus.SCHEDULED.name, 0)
+                + count_by_status.get(AppointmentStatus.CONFIRMED.name, 0)
+            )
         ),
-        total_past=int(count_by_status.get("DONE", 0)),
-        total_cancelled=int(count_by_status.get("CANCELLED", 0)),
+        total_past=int(count_by_status.get(AppointmentStatus.DONE.name, 0)),
+        total_cancelled=int(count_by_status.get(AppointmentStatus.CANCELLED.name, 0)),
         next_appointment_start_utc=next_appt.starts_at if next_appt else None,
-        next_appointment_service=next_appt.service if next_appt else None,
+        next_appointment_service=(
+            getattr(next_appt, "service", None) if next_appt else None
+        ),
     )
 
     total_pages = max(1, (total_items + page_size - 1) // page_size)
@@ -179,101 +261,257 @@ def ui_family_appointments(
 @router.get("/professional/week")
 def ui_professional_week(
     request: Request,
-    current_user: Annotated[User, Depends(require_roles(Role.PROFESSIONAL))],
+    current_user: Annotated[
+        "User", Depends(require_roles(Role.PROFESSIONAL, Role.COORDINATION))
+    ],
     db: Annotated[Session, Depends(get_db)],
-    week_start: date | None = None,
+    start: date | None = Query(
+        default=None, description="YYYY-MM-DD (início da semana local)"
+    ),
+    days: int = Query(default=7, ge=1, le=14),
+    professional_id: int | None = Query(default=None, ge=1),
+    status: str | None = Query(default=None),
+    q: str | None = Query(default=None),
     tz_local: str = "America/Sao_Paulo",
-    statuses: list[AppointmentStatus] | None = Query(default=None),
 ):
-    from zoneinfo import ZoneInfo
-
+    # --- TZ local
     try:
         tz = ZoneInfo(tz_local)
     except Exception:
-        tz = DEFAULT_TZ
+        tz = ZoneInfo("America/Sao_Paulo")  # fallback seguro
 
+    # --- Resolve professional_id
+    if current_user.role == Role.PROFESSIONAL:
+        prof = (
+            db.query(Professional)
+            .filter(Professional.user_id == current_user.id)
+            .one_or_none()
+        )
+        prof_id = prof.id if prof else None
+        if prof_id is None:
+            # página amigável se não estiver vinculado
+            return templates.TemplateResponse(
+                "professional_link_missing.html",
+                {"request": request, "current_user": current_user},
+                status_code=403,
+            )
+    else:  # COORDINATION
+        if professional_id is None:
+            raise HTTPException(400, "Informe professional_id")
+        prof_id = int(professional_id)
+
+    # --- Janela local -> UTC
     today_local = datetime.now(tz).date()
-    anchor = week_start or today_local
-    start_local, end_local = week_bounds_local(anchor, tz)
-    start_utc = start_local.astimezone(ZoneInfo("UTC"))
-    end_utc = end_local.astimezone(ZoneInfo("UTC"))
+    start_local = start or (
+        today_local - timedelta(days=today_local.weekday())
+    )  # segunda
+    start_dt_local = datetime.combine(start_local, time.min, tzinfo=tz)
+    end_dt_local = start_dt_local + timedelta(days=days)
+    start_utc = start_dt_local.astimezone(UTC)
+    end_utc = end_dt_local.astimezone(UTC)
 
-    conds = [
-        Appointment.professional_id == current_user.id,
-        Appointment.starts_at >= start_utc,
-        Appointment.starts_at < end_utc,
-    ]
-    if statuses:
-        conds.append(Appointment.status.in_(statuses))
-    else:
-        conds.append(not_(Appointment.status == AppointmentStatus.CANCELLED))
-
-    appts = (
-        db.query(Appointment)
-        .filter(and_(*conds))
-        .order_by(Appointment.starts_at.asc())
-        .all()
+    # --- Colunas de data com fallback
+    START_COL = (
+        Appointment.starts_at
+        if hasattr(Appointment, "starts_at")
+        else getattr(Appointment, "starts_at_utc", None)
+    )
+    END_COL = (
+        Appointment.ends_at
+        if hasattr(Appointment, "ends_at")
+        else getattr(Appointment, "ends_at_utc", None)
     )
 
-    # Bucket por dia
-    from collections import defaultdict
-
-    days_map: dict[date, list] = defaultdict(list)
-    for ap in appts:
-        sl = ap.starts_at.astimezone(tz)
-        el = ap.end_at.astimezone(tz)
-        days_map[sl.date()].append(
-            {
-                "id": ap.id,
-                "service": ap.service,
-                "status": ap.status,
-                "location": ap.location,
-                "student_name": getattr(getattr(ap, "student", None), "name", None)
-                or getattr(getattr(ap, "student", None), "email", None),
-                "student_id": ap.student_id,
-                "start_at_local": sl,
-                "end_at_local": el,
-            }
+    if START_COL is None or END_COL is None:
+        raise RuntimeError(
+            "Appointment precisa ter starts_at/ends_at (ou starts_at_utc/ends_at_utc)."
         )
-    for items in days_map.values():
-        items.sort(key=lambda i: i["start_at_local"])
 
-    days = []
-    cur = start_local
-    for _ in range(7):
-        d = cur.date()
-        days.append({"date_local": d, "items": days_map.get(d, [])})
-        cur += timedelta(days=1)
+    # --- Query base
+    base = (
+        db.query(Appointment)
+        .options(joinedload(Appointment.student))
+        .filter(
+            Appointment.professional_id == prof_id,
+            START_COL >= start_utc,
+            START_COL < end_utc,
+        )
+    )
 
-    # Summary
-    counts = (
+    # status (tenta interpretar pelo Enum; se falhar, ignora silenciosamente)
+    if status:
+        try:
+            st = AppointmentStatus(status)
+            base = base.filter(Appointment.status == st)
+        except Exception:
+            # fallback por string
+            base = base.filter(
+                func.lower(func.cast(Appointment.status, func.TEXT)).like(
+                    f"%{status.lower()}%"
+                )
+            )
+
+    # busca (aluno, serviço, local)
+    if q:
+        like = f"%{q.strip()}%"
+        parts = []
+        if hasattr(Appointment, "service"):
+            parts.append(Appointment.service.ilike(like))
+        if hasattr(Appointment, "location"):
+            parts.append(Appointment.location.ilike(like))
+        base = base.join(Student, Student.id == Appointment.student_id).filter(
+            or_(*(parts + [Student.name.ilike(like)]))
+            if parts
+            else Student.name.ilike(like)
+        )
+
+    base = base.order_by(START_COL.asc())
+    rows = base.all()
+
+    # --- Contagem por status (em toda a janela)
+    rows_counts = (
         db.query(Appointment.status, func.count(Appointment.id))
         .filter(
-            and_(
-                Appointment.professional_id == current_user.id,
-                Appointment.starts_at >= start_utc,
-                Appointment.starts_at < end_utc,
-            )
+            Appointment.professional_id == prof_id,
+            START_COL >= start_utc,
+            START_COL < end_utc,
         )
         .group_by(Appointment.status)
         .all()
     )
-    count_by_status = {s: int(c) for (s, c) in counts}
-    summary = {
-        "week_start_local": start_local.date(),
-        "week_end_local": end_local.date(),
-        "count_by_status": count_by_status,
-        "total_week": sum(count_by_status.values()),
+
+    def _k(s):
+        return s.value if hasattr(s, "value") else str(s)
+
+    count_by_status_map = {_k(s): int(c) for (s, c) in rows_counts}
+
+    # Agregados amigáveis (Confirmados/Cancelados/Realizados)
+    confirmados = sum(
+        c for (k, c) in count_by_status_map.items() if _status_matches(k, ["confirm"])
+    )
+    cancelados = sum(
+        c for (k, c) in count_by_status_map.items() if _status_matches(k, ["cancel"])
+    )
+    realizados = sum(
+        c
+        for (k, c) in count_by_status_map.items()
+        if _status_matches(k, ["realiz", "done", "complet"])
+    )
+
+    counts = {
+        "total": len(rows),
+        "confirmados": confirmados,
+        "cancelados": cancelados,
+        "realizados": realizados,
     }
 
-    trail = [("/", "Início"), ("/ui/professional/week", "Minha semana")]
+    # --- Itens para o template
+    def _get_dt(obj, *names):
+        for n in names:
+            if hasattr(obj, n):
+                return getattr(obj, n)
+        return None
+
+    appointments = []
+    for ap in rows:
+        s_utc = _get_dt(ap, "starts_at_utc", "starts_at")
+        e_utc = _get_dt(ap, "ends_at_utc", "ends_at", "end_at")
+        appointments.append(
+            {
+                "id": ap.id,
+                "student_name": getattr(ap.student, "name", None),
+                "status": getattr(ap, "status", None),
+                "service": getattr(ap, "service", None),
+                "location": getattr(ap, "location", None),
+                "starts_at_str": _fmt_dt_local(s_utc, tz) if s_utc else "-",
+                "ends_at_str": _fmt_dt_local(e_utc, tz) if e_utc else "-",
+            }
+        )
+
+    # --- Navegação semanal (URLs)
+    # Garante query params persistentes (status, q, days, professional_id quando coordenação)
+
+    route_name = request.scope["route"].name
+    path_params = getattr(request, "path_params", {}) or {}
+    base_path = str(request.url_for(route_name, **path_params))
+
+    base_params = {"days": days}
+
+    if status:
+        base_params["status"] = status
+
+    if q:
+        base_params["q"] = q
+
+    if current_user.role == Role.COORDINATION:
+        base_params["professional_id"] = int(prof_id)
+
+    prev_start = (start_local - timedelta(days=days)).isoformat()
+    next_start = (start_local + timedelta(days=days)).isoformat()
+
+    prev_url = build_url(base_path, {**base_params, "start": prev_start})
+    next_url = build_url(base_path, {**base_params, "start": next_start})
+
+    # Limpar filtros (mantém janela/ids)
+    clear_params = {"days": days, "start": start_local.isoformat()}
+    if current_user.role == Role.COORDINATION:
+        clear_params["professional_id"] = int(prof_id)
+    clear_filters_url = build_url(base_path, clear_params)
+
+    # --- Status options para o <select>
+    status_options = []
+    try:
+        # Tenta usar o Enum (ordem estável)
+        for m_name, m_val in getattr(AppointmentStatus, "__members__", {}).items():
+            label = m_name.capitalize().replace("_", " ")
+            status_options.append(
+                (m_val.value if hasattr(m_val, "value") else str(m_val), label)
+            )
+    except Exception:
+        # Fallback: usa chaves já vistas nesta janela
+        for k in sorted(count_by_status_map.keys()):
+            status_options.append((k, k.capitalize()))
+
+    # --- Período (strings legíveis)
+    period_start_str = _period_str(start_dt_local.date())
+    period_end_str = _period_str(
+        (end_dt_local - timedelta(days=1)).date()
+    )  # fim inclusivo na UI
+
+    trail = [("/", "Início"), ("/ui/professional/week", "Minha agenda")]
+
     return templates.TemplateResponse(
         "professional_week.html",
         {
             "request": request,
+            "csp_nonce": request.state.csp_nonce,
             "current_user": current_user,
+            # Navegação + período
+            "prev_url": prev_url,
+            "next_url": next_url,
+            "period_start_str": period_start_str,
+            "period_end_str": period_end_str,
+            # Filtros
+            "status_options": status_options,
+            "current_status": status,
+            "q": q or "",
+            "clear_filters_url": clear_filters_url,
+            # Sumário e lista
+            "counts": counts,
+            "appointments": appointments,
+            # (opcionais para debug/uso futuro)
+            "professional_id": int(prof_id),
+            "start": start_local.isoformat(),
             "days": days,
-            "summary": summary,
+            "summary": {
+                "total": counts["total"],
+                "by_status": count_by_status_map,
+                "window": {
+                    "start_local": start_dt_local.isoformat(),
+                    "end_local": end_dt_local.isoformat(),
+                    "tz_local": tz.key,
+                },
+            },
             "trail": trail,
         },
     )

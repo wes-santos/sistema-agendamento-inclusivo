@@ -4,7 +4,7 @@ import datetime as dt
 import enum
 
 from sqlalchemy import Boolean, DateTime, Enum, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base
 
@@ -38,3 +38,5 @@ class User(Base):
         onupdate=lambda: dt.datetime.now(tz=dt.UTC),
         nullable=False,
     )
+
+    professional = relationship("Professional", back_populates="user", uselist=False)

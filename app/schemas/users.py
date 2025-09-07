@@ -22,3 +22,4 @@ class UserCreate(BaseModel):
     name: str
     password: str
     role: Role
+    professional_id: int | None = None

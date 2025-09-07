@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import re
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+from starlette.types import ASGIApp
 
 from app.core.settings import settings
 
@@ -68,3 +72,29 @@ def decode_token(token: str, expected_type: str) -> dict:
     if payload.get("type") != expected_type:
         raise ValueError("Tipo de token inválido.")
     return payload
+
+
+class CSPMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app: ASGIApp):
+        super().__init__(app)
+
+    async def dispatch(self, request, call_next):
+        nonce = secrets.token_urlsafe(16)
+        request.state.csp_nonce = nonce
+
+        response: Response = await call_next(request)
+
+        csp = (
+            "default-src 'self'; "
+            f"style-src 'self' 'nonce-{nonce}'; "
+            "script-src 'self'; "
+            "img-src 'self' data:; "
+            "font-src 'self' data:; "
+            "connect-src 'self'; "
+            "object-src 'none'; "
+            "base-uri 'self'; "
+            "frame-ancestors 'none'; "
+            "form-action 'self'"
+        )
+        response.headers["Content-Security-Policy"] = csp
+        return response
