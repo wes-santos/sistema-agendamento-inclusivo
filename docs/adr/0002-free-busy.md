@@ -1,9 +1,9 @@
 # ADR 0002 — Abstração Free/Busy (disponibilidade & conflitos)
 
-* **Status**: Superseded
-* **Superseded by:** ADR-0003 — Free/Busy via SQL + Constraints  
+* **Status**: Amended
+* **Amended by:** ADR-0003 — Free/Busy via SQL + Constraints  
 * **Data da decisão original**: 2025-09-06
-* **Motivo da substituição:** a implementação adotada difere do desenho originalmente proposto (serviço dedicado).
+* **Resumo da emenda:** a lógica de free/busy será mantida nas rotas (`/slots`, `/slots/local`, `POST /appointments`) com checagem de sobreposição e `UNIQUE(professional_id, starts_at)`; serviço dedicado poderá ser reavaliado no futuro.
 * **Decisores**: Coordenação de Engenharia
 * **Contexto**
   * A ADR-0002 permanece arquivada para **histórico**. Para a decisão vigente, consulte a **ADR-0005**.
