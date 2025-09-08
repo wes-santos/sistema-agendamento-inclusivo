@@ -1,4 +1,4 @@
-    # ADR 0001 — Persistir UTC, Exibir America/Sao\_Paulo
+# ADR 0001 — Persistir UTC, Exibir America/Sao\_Paulo
 
 * **Status**: Accepted
 * **Data**: 2025-09-06
@@ -51,4 +51,3 @@
 
 * `app/utils/tz.py` (helpers)
 * `tests/test_tz_helpers.py`
-* ADR 0002 — Free/Busy
