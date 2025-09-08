@@ -1,10 +1,12 @@
 # ADR 0002 — Abstração Free/Busy (disponibilidade & conflitos)
 
-* **Status**: Accepted
-* **Data**: 2025-09-06
+* **Status**: Superseded
+* **Superseded by:** ADR-0003 — Free/Busy via SQL + Constraints  
+* **Data da decisão original**: 2025-09-06
+* **Motivo da substituição:** a implementação adotada difere do desenho originalmente proposto (serviço dedicado).
 * **Decisores**: Coordenação de Engenharia
 * **Contexto**
-
+  * A ADR-0002 permanece arquivada para **histórico**. Para a decisão vigente, consulte a **ADR-0005**.
   * Precisamos oferecer uma visão de “horários livres/ocupados” por profissional/serviço, com geração de slots e prevenção de conflitos.
   * Já existe a tabela `availability` (recorrência semanal em UTC) e `appointments` com `UniqueConstraint(professional_id, starts_at_utc)`.
 
