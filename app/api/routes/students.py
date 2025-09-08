@@ -1,7 +1,7 @@
 # app/api/routes/students.py
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.audit.helpers import record_audit
@@ -17,6 +17,7 @@ router = APIRouter(prefix="/students", tags=["students"])
 @router.post("", response_model=StudentOut, status_code=201)
 def create_student(
     payload: StudentCreateIn,
+    request: Request,
     current_user: Annotated[
         User, Depends(require_roles(Role.FAMILY, Role.COORDINATION))
     ],
@@ -44,7 +45,7 @@ def create_student(
     # audit
     record_audit(
         db,
-        request=Depends(),
+        request=request,
         user_id=current_user.id,
         action="CREATE",
         entity="student",
