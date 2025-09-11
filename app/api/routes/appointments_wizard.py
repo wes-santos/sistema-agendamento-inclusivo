@@ -152,7 +152,19 @@ def create_appointment(
         service=prof.speciality,
     )
     db.add(ap)
-    db.flush()  # tenta obter id cedo
+    try:
+        db.flush()  # tenta obter id cedo
+    except Exception as e:
+        if (
+            "uq_appt_prof_start" in str(e.orig)
+            or "unique" in str(e.orig).lower()
+            or getattr(getattr(e, "orig", None), "pgcode", None) == "23505"
+        ):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Ops, o horário acabou de ser reservado por outra pessoa. Atualize os horários e escolha outro.",
+            ) from IntegrityError
+        raise
 
     guardian = db.get(User, student.guardian_user_id)
 
@@ -174,12 +186,15 @@ def create_appointment(
         db.commit()
     except IntegrityError as e:
         db.rollback()
-        # corrida: unique do par (professional_id, starts_at)
-        if "uq_appt_prof_start" in str(e.orig) or "unique" in str(e.orig).lower():
+        if (
+            "uq_appt_prof_start" in str(e.orig)
+            or "unique" in str(e.orig).lower()
+            or getattr(getattr(e, "orig", None), "pgcode", None) == "23505"
+        ):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "Ops, o horário acabou de ser reservado por outra pessoa. Atualize os horários e escolha outro.",
-            ) from Exception
+            ) from IntegrityError
         raise
 
     db.refresh(ap)
