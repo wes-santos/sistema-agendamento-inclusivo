@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from sqlalchemy import and_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -11,12 +12,14 @@ from app.audit.helpers import record_audit
 from app.db import get_db
 from app.deps import require_roles
 from app.models.appointment import Appointment, AppointmentStatus
+from app.models.availability import Availability
 from app.models.professional import Professional
 from app.models.student import Student
 from app.models.user import Role, User
 from app.schemas.appointments import (
     AppointmentOut,
     CreateAppointmentIn,
+    RescheduleIn,
     Step1CheckIn,
     Step1CheckOut,
     Step2ReviewIn,
@@ -62,6 +65,37 @@ def _load_professional(db: Session, professional_id: int) -> Professional:
     if not prof.is_active:
         raise HTTPException(400, "Profissional inativo")
     return prof
+
+
+def _ensure_can_manage_appointment(db: Session, user: User, ap: Appointment):
+    # COORDINATION pode tudo; FAMILY só se for o responsável do aluno
+    if user.role == Role.COORDINATION:
+        return
+    if user.role == Role.FAMILY:
+        # lazy: ap.student já está mapeado no modelo
+        if not ap.student or ap.student.guardian_user_id != user.id:
+            raise HTTPException(403, "Você não pode remarcar este atendimento.")
+        return
+    # Outros perfis não podem (ex.: PROFESSIONAL) — ajuste se quiser permitir
+    raise HTTPException(403, "Perfil sem permissão para remarcar.")
+
+
+def _fits_availability(
+    db: Session, professional_id: int, start_utc: datetime, minutes: int
+) -> bool:
+    end_utc = start_utc + timedelta(minutes=minutes)
+    avs = (
+        db.query(Availability)
+        .filter(Availability.professional_id == professional_id)
+        .all()
+    )
+    day_avs = [
+        (a.starts_utc, a.ends_utc) for a in avs if a.weekday == start_utc.weekday()
+    ]
+    if not day_avs:
+        return False
+    s_t, e_t = start_utc.time(), end_utc.time()
+    return any(s_t >= a0 and e_t <= a1 for (a0, a1) in day_avs)
 
 
 # ------- Passo 1: escolher/validar horário -------
@@ -207,6 +241,98 @@ def create_appointment(
         str(cancel_token),
     )
 
+    return AppointmentOut(
+        id=ap.id,
+        professional_id=ap.professional_id,
+        student_id=ap.student_id,
+        starts_at=iso_utc(ap.starts_at),
+        ends_at=iso_utc(ap.ends_at),
+        status=ap.status.value,
+    )
+
+
+@router.put("/{appointment_id}/reschedule", response_model=AppointmentOut)
+def reschedule_appointment(
+    appointment_id: int,
+    payload: RescheduleIn,
+    request: Request,
+    current_user: User = Depends(require_roles(Role.FAMILY, Role.COORDINATION)),
+    db: Session = Depends(get_db),
+):
+    ap = db.get(Appointment, appointment_id)
+    if not ap:
+        raise HTTPException(404, "Agendamento não encontrado")
+
+    _ensure_can_manage_appointment(db, current_user, ap)
+
+    # Regra: mínimo 6h de antecedência
+    new_start = _parse_start(
+        payload.new_starts_at_iso
+    )  # mesma função usada no agendamento
+    min_allowed = datetime.now(UTC) + timedelta(hours=6)
+    if new_start < min_allowed:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Remarcação deve ocorrer com antecedência mínima de 6h.",
+        )
+
+    # Mantém a mesma duração
+    slot_minutes = int((ap.ends_at - ap.starts_at).total_seconds() // 60)
+    if slot_minutes <= 0:
+        raise HTTPException(400, "Duração inválida do atendimento atual.")
+
+    # 1) Disponibilidade do profissional no dia/horário (não mexe na tua tabela)
+    if not _fits_availability(db, ap.professional_id, new_start, slot_minutes):
+        raise HTTPException(409, "Fora do horário de atendimento do profissional.")
+
+    new_end = new_start + timedelta(minutes=slot_minutes)
+
+    # 2) Conflito com OUTROS agendamentos (ignora o próprio)
+    conflict = (
+        db.query(Appointment.id)
+        .filter(
+            and_(
+                Appointment.professional_id == ap.professional_id,
+                Appointment.status != AppointmentStatus.CANCELLED,
+                Appointment.id != ap.id,
+                Appointment.starts_at < new_end,
+                Appointment.ends_at > new_start,
+            )
+        )
+        .first()
+    )
+    if conflict:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Horário indisponível (conflito com outro atendimento).",
+        )
+
+    # Atualiza horários (status permanece); updated_at é onupdate
+    ap.starts_at = new_start
+    ap.ends_at = new_end
+
+    record_audit(
+        db,
+        request=request,
+        user_id=current_user.id,
+        action="RESCHEDULE",
+        entity="appointment",
+        entity_id=ap.id,
+    )
+
+    try:
+        db.commit()
+    except IntegrityError as e:
+        db.rollback()
+        # Se outra corrida ganhar, mantemos 409 (mesmo padrão do create)
+        if "unique" in str(e.orig).lower() or "uq_appt_prof_start" in str(e.orig):
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "Ops, o horário acabou de ser reservado por outra pessoa. Atualize e escolha outro.",
+            ) from Exception
+        raise
+
+    db.refresh(ap)
     return AppointmentOut(
         id=ap.id,
         professional_id=ap.professional_id,

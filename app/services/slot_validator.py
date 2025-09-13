@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
-from app.models.appointment import Appointment, AppointmentStatus
+from app.models.appointment import ACTIVE_STATUSES, Appointment
 from app.models.availability import Availability
 
 
@@ -39,7 +39,7 @@ def validate_slot(
         .filter(
             and_(
                 Appointment.professional_id == professional_id,
-                Appointment.status != AppointmentStatus.CANCELLED,
+                Appointment.status.in_(ACTIVE_STATUSES),  # <<< aqui
                 Appointment.starts_at < end_utc,
                 Appointment.ends_at > start_utc,
             )

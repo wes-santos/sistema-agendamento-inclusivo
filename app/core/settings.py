@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     ALLOWED_HOSTS: str = "localhost,127.0.0.1"
 
     # If True, login will also set HttpOnly cookies (works with frontends that avoid localStorage)  # noqa: E501
-    USE_COOKIE_AUTH: bool = True
+    USE_COOKIE_AUTH: bool = False
 
     # Only set a domain in production (e.g., ".yourdomain.com"). Leave None in dev.
     COOKIE_DOMAIN: str | None = None
@@ -48,6 +48,9 @@ class Settings(BaseSettings):
     MAIL_FROM: str = os.getenv("MAIL_FROM", "no-reply@sai.local")
     MAIL_FROM_NAME: str = os.getenv("MAIL_FROM_NAME", "SAI")
     APP_PUBLIC_BASE_URL: str = os.getenv("APP_PUBLIC_BASE_URL", "http://localhost:8000")
+    FALLBACK_REMINDER_EMAIL: str = os.getenv(
+        "FALLBACK_REMINDER_EMAIL", "seu.email@exemplo.com"
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env.dev",
