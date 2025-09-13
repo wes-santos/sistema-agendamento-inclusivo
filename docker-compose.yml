@@ -32,6 +32,19 @@ services:
       - "8025:8025"   # UI web
       - "1025:1025"   # SMTP
 
+  reminder-cron:
+    image: python:3.12-slim
+    container_name: agenda_reminder_cron
+    working_dir: /app
+    env_file:
+      - .env.dev
+    volumes:
+      - ./:/app
+    command: bash -lc 'pip install --no-cache-dir poetry && poetry install --only main --no-root && echo "0 9 * * * poetry run python -m app.jobs.remind_t24 >> /var/log/reminders.log 2>&1" > /etc/cron.d/reminders && chmod 0644 /etc/cron.d/reminders && crontab /etc/cron.d/reminders && cron -f'
+    depends_on:
+      - db
+      - mailhog
+
 volumes:
   pgdata:
 

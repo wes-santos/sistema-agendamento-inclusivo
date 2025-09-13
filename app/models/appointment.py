@@ -2,14 +2,15 @@ from __future__ import annotations
 
 import datetime as dt
 import enum
+
 from sqlalchemy import (
     CheckConstraint,
-    String,
-    Integer,
     DateTime,
     Enum,
     ForeignKey,
     Index,
+    Integer,
+    String,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,6 +23,12 @@ class AppointmentStatus(str, enum.Enum):
     CONFIRMED = "CONFIRMED"
     CANCELLED = "CANCELLED"
     DONE = "DONE"
+
+
+ACTIVE_STATUSES: tuple[AppointmentStatus, ...] = (
+    AppointmentStatus.SCHEDULED,
+    AppointmentStatus.CONFIRMED,
+)
 
 
 class Appointment(Base):
@@ -40,6 +47,9 @@ class Appointment(Base):
         Enum(AppointmentStatus, name="appointment_status_enum"),
         nullable=False,
         default=AppointmentStatus.SCHEDULED,
+    )
+    reminder_24h_sent_at: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
     )
     starts_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

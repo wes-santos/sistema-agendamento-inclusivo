@@ -50,3 +50,10 @@ class AppointmentOut(BaseModel):
     starts_at: str
     ends_at: str
     status: str
+
+
+class RescheduleIn(BaseModel):
+    new_starts_at_iso: str = Field(
+        ...,
+        description="ISO-8601; preferir UTC com sufixo Z (ex.: 2025-09-15T13:00:00Z)",
+    )
