@@ -22,13 +22,6 @@ Regras de exibição por perfil:
                 ('FAMILY' in (current_user.roles or [])) or (current_user.role|default('') == 'FAMILY')
                 ) %}
                 <li class="nav__item">
-                    <a href="/family/dashboard"
-                        class="nav__link {{ 'is-active' if path.startswith('/family/dashboard') else '' }}"
-                        aria-current="{{ 'page' if path.startswith('/family/dashboard') else '' }}">
-                        Dashboard
-                    </a>
-                </li>
-                <li class="nav__item">
                     <a href="/family/appointments"
                         class="nav__link {{ 'is-active' if path.startswith('/family/appointments') else '' }}"
                         aria-current="{{ 'page' if path.startswith('/family/appointments') else '' }}">
@@ -41,13 +34,6 @@ Regras de exibição por perfil:
                 {% if (current_user is defined) and (
                 ('PROFESSIONAL' in (current_user.roles or [])) or (current_user.role|default('') == 'PROFESSIONAL')
                 ) %}
-                <li class="nav__item">
-                    <a href="/professional/dashboard"
-                        class="nav__link {{ 'is-active' if path.startswith('/professional/dashboard') else '' }}"
-                        aria-current="{{ 'page' if path.startswith('/professional/dashboard') else '' }}">
-                        Painel do profissional
-                    </a>
-                </li>
                 <li class="nav__item">
                     <a href="/professional/schedule"
                         class="nav__link {{ 'is-active' if path.startswith('/professional/schedule') else '' }}"
@@ -82,7 +68,7 @@ Regras de exibição por perfil:
             <div class="topbar__auth">
                 {% if current_user %}
                 <span class="me-2 text-muted">Olá, {{ current_user.name }}</span>
-                <a class="btn btn--secondary" href="{{ url_for('auth_logout') }}?next={{ request.url.path }}">Sair</a>
+                <a class="btn btn--secondary" href="{{ url_for('auth_logout') }}?next=/login">Sair</a>
                 {% else %}
                 <a class="btn" href="{{ url_for('auth_login_get') }}?next={{ request.url.path }}">Entrar</a>
                 {% endif %}

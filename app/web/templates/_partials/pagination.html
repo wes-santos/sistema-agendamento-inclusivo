@@ -22,7 +22,8 @@ persist_query?: str
 {%- endif -%}
 {%- endmacro %}
 
-{% if pagination is defined and pagination.pages|int > 1 %}
+{# Render only if a valid pagination object is provided #}
+{% if pagination and (pagination.pages|int > 1) %}
 {% set page = pagination.page|int %}
 {% set pages = pagination.pages|int %}
 {% set window = 2 %} {# quantas páginas mostrar ao redor da atual #}

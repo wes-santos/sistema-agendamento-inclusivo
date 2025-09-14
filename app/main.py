@@ -15,7 +15,6 @@ from starlette.responses import JSONResponse
 
 import app.db.base
 from app.api.routes.appointments_wizard import router as appt_wizard_router
-from app.api.routes.auth import router as auth_router
 from app.api.routes.availability import router as availability_router
 from app.api.routes.dashboard_coordination import (
     router as dashboard_coordination_router,
@@ -129,7 +128,6 @@ app.add_middleware(
 app.add_middleware(CSPMiddleware)
 
 
-app.include_router(auth_router)
 app.include_router(dashboard_family_router)
 app.include_router(dashboard_professional_router)
 app.include_router(dashboard_coordination_router)
@@ -184,11 +182,11 @@ def home_redirect(
 ):
     if not current_user:
         return RedirectResponse("/ui/login", status_code=303)
-    # mesmo roteamento da after-login
+    # mesmo roteamento da after-login (páginas não-UI)
     if current_user.role == Role.FAMILY:
-        return RedirectResponse("/ui/family/appointments", status_code=303)
+        return RedirectResponse("/family/dashboard", status_code=303)
     if current_user.role == Role.PROFESSIONAL:
-        return RedirectResponse("/ui/professional/week", status_code=303)
+        return RedirectResponse("/professional/dashboard", status_code=303)
     if current_user.role == Role.COORDINATION:
-        return RedirectResponse("/ui/coordination/overview", status_code=303)
+        return RedirectResponse("/coordination/dashboard", status_code=303)
     return RedirectResponse("/ui/login", status_code=303)

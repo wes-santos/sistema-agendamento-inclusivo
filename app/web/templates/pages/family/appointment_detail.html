@@ -6,11 +6,36 @@
 
 {% block title %}Agendamento — Detalhes{% endblock %}
 
+{% block extra_css %}
+<style>
+  .dl.grid-2 {display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}
+  .dl dt {font-weight:600;color:var(--muted);margin:0 0 .25rem}
+  .dl dd {margin:0}
+  .detail-head {display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-bottom:.5rem}
+  .detail-title {font-size:1.1rem;font-weight:700}
+  .detail-sub {color:var(--muted)}
+  .btnbar {display:flex;gap:.5rem;flex-wrap:wrap}
+  .mt-4{margin-top:1rem}
+  .hstack{display:flex;gap:.5rem;align-items:center}
+  .only-desktop{display:none}@media(min-width:768px){.only-desktop{display:flex}}
+  .only-mobile{display:flex}@media(min-width:768px){.only-mobile{display:none}}
+</style>
+{% endblock %}
+
 {% block content %}
 {% set breadcrumbs = [{'label':'Família', 'href':'/family/appointments'}, {'label':'Detalhes'}] %}
 {% include "_partials/breadcrumbs.html" %}
 
-{% call card(title=appointment.service_name, subtitle=appointment.professional_name) %}
+{% set header_actions %}
+<div class="btnbar only-desktop">
+  <a class="btn btn--ghost" href="/family/dashboard">Voltar ao painel</a>
+  <a class="btn btn--ghost" href="/family/appointments">Voltar aos agendamentos</a>
+  {% if appointment.confirm_url %}<a class="btn btn--success" href="{{ appointment.confirm_url }}">Confirmar presença</a>{% endif %}
+  {% if appointment.cancel_url %}<a class="btn btn--danger" href="{{ appointment.cancel_url }}">Cancelar</a>{% endif %}
+</div>
+{% endset %}
+
+{% call card(title=appointment.service_name, subtitle=appointment.professional_name, actions_html=header_actions) %}
 <dl class="dl grid-2">
     <div>
         <dt>Início</dt>
@@ -29,12 +54,11 @@
         <dd>{{ status_badge(appointment.status) }}</dd>
     </div>
 </dl>
-<div class="mt-4 hstack gap-2">
-    {% if appointment.confirm_url %}<a class="btn btn--success" href="{{ appointment.confirm_url }}">Confirmar
-        presença</a>{% endif %}
-    {% if appointment.cancel_url %}<a class="btn btn--danger" href="{{ appointment.cancel_url }}">Cancelar</a>{% endif
-    %}
-    <a class="btn btn--ghost" href="{{ url_for('family_appointments') }}">Voltar aos agendamentos</a>
+<div class="mt-4 btnbar only-mobile">
+  <a class="btn btn--ghost" href="/family/dashboard">Voltar ao painel</a>
+  <a class="btn btn--ghost" href="/family/appointments">Voltar aos agendamentos</a>
+  {% if appointment.confirm_url %}<a class="btn btn--success" href="{{ appointment.confirm_url }}">Confirmar presença</a>{% endif %}
+  {% if appointment.cancel_url %}<a class="btn btn--danger" href="{{ appointment.cancel_url }}">Cancelar</a>{% endif %}
 </div>
 {% endcall %}
 {% endblock %}

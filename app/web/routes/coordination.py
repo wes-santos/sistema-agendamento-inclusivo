@@ -4,16 +4,21 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta
 from io import StringIO
+from urllib.parse import urlencode
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, Response
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, func, case
 
 # Ajuste estes imports para o seu projeto
 from app.db.session import get_db
 from app.deps import require_roles
 from app.models.user import Role, User
+from app.models.appointment import Appointment, AppointmentStatus
+from app.models.student import Student
+from app.models.professional import Professional
 from app.web.templating import render
 
 router = APIRouter()
@@ -236,6 +241,9 @@ def _render_coordination_dashboard(
     current_user: User | None,
     db: Session | None,
     demo: bool,
+    *,
+    q: str | None = None,
+    status: str | None = None,
 ) -> HTMLResponse:
     today = date.today()
     kpis = {"to_confirm": 0, "today": 0, "week": 0, "canceled_7d": 0}
@@ -243,7 +251,7 @@ def _render_coordination_dashboard(
 
     if demo:
         items = demo_appointments(today)
-        # Fila: scheduled a partir de hoje e próximos 7 dias
+        # Fila e KPIs usando dados fake
         queue = [
             {
                 "id": it["id"],
@@ -281,8 +289,117 @@ def _render_coordination_dashboard(
             for it in items
             if it["status"] == "canceled" and seven_days_ago <= it["date"] <= today
         )
+    else:
+        # Dados reais do banco
+        from datetime import UTC, datetime
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo("America/Sao_Paulo")
+        now = datetime.now(UTC)
+
+        # Fila: próximos 7 dias com status SCHEDULED
+        in_7d = now + timedelta(days=7)
+        query = (
+            db.query(Appointment, Student, Professional, User)
+            .join(Student, Student.id == Appointment.student_id)
+            .join(Professional, Professional.id == Appointment.professional_id)
+            .join(User, User.id == Student.guardian_user_id)
+            .filter(
+                Appointment.status == AppointmentStatus.SCHEDULED,
+                Appointment.starts_at >= now,
+                Appointment.starts_at < in_7d,
+            )
+        )
+        # filtros
+        if status:
+            st = status.lower()
+            if st == "confirmed":
+                query = query.filter(Appointment.status == AppointmentStatus.CONFIRMED)
+            elif st == "scheduled":
+                query = query.filter(Appointment.status == AppointmentStatus.SCHEDULED)
+        if q:
+            like = f"%{q.strip()}%"
+            query = query.filter(
+                or_(
+                    Appointment.service.ilike(like),
+                    Professional.name.ilike(like),
+                    User.name.ilike(like),
+                )
+            )
+
+        rows = query.order_by(Appointment.starts_at.asc()).all()
+        queue = [
+            {
+                "id": ap.id,
+                "family_name": g.name if g else getattr(st.guardian, "name", "Família"),
+                "service_name": ap.service,
+                "professional_name": pr.name or getattr(pr.user, "name", None),
+                "starts_at_local": ap.starts_at.astimezone(tz).strftime("%d/%m/%Y %H:%M"),
+                "status": (
+                    "confirmed"
+                    if ap.status == AppointmentStatus.CONFIRMED
+                    else "scheduled"
+                ),
+                "confirm_url": None,
+                "remind_url": None,
+                "cancel_url": None,
+            }
+            for (ap, st, pr, g) in rows
+        ]
+
+        # KPIs
+        kpis["to_confirm"] = (
+            db.query(Appointment)
+            .filter(Appointment.status == AppointmentStatus.SCHEDULED)
+            .count()
+        )
+        start_today = datetime.combine(today, time.min, tzinfo=tz).astimezone(UTC)
+        end_today = datetime.combine(today, time.max, tzinfo=tz).astimezone(UTC)
+        kpis["today"] = (
+            db.query(Appointment)
+            .filter(
+                Appointment.starts_at >= start_today,
+                Appointment.starts_at <= end_today,
+                Appointment.status.in_(
+                    [
+                        AppointmentStatus.SCHEDULED,
+                        AppointmentStatus.CONFIRMED,
+                        AppointmentStatus.DONE,
+                    ]
+                ),
+            )
+            .count()
+        )
+        ws = start_of_week(today)
+        we = end_of_week(today)
+        start_week = datetime.combine(ws, time.min, tzinfo=tz).astimezone(UTC)
+        end_week = datetime.combine(we, time.max, tzinfo=tz).astimezone(UTC)
+        kpis["week"] = (
+            db.query(Appointment)
+            .filter(
+                Appointment.starts_at >= start_week,
+                Appointment.starts_at <= end_week,
+                Appointment.status.in_([
+                    AppointmentStatus.SCHEDULED,
+                    AppointmentStatus.CONFIRMED,
+                    AppointmentStatus.DONE,
+                ]),
+            )
+            .count()
+        )
+        seven_days_ago = today - timedelta(days=7)
+        start_7d = datetime.combine(seven_days_ago, time.min, tzinfo=tz).astimezone(UTC)
+        kpis["canceled_7d"] = (
+            db.query(Appointment)
+            .filter(
+                Appointment.starts_at >= start_7d,
+                Appointment.status == AppointmentStatus.CANCELLED,
+            )
+            .count()
+        )
 
     ctx = {
+        "current_user": current_user,
         "queue": queue,
         "kpis": kpis,
     }
@@ -295,8 +412,10 @@ def ui_coordination_dashboard(
     current_user: User = Depends(require_roles(Role.COORDINATION)),
     db: Session = Depends(get_db),
     demo: bool = Query(False),
+    q: str | None = Query(None),
+    status: str | None = Query(None),
 ):
-    return _render_coordination_dashboard(request, current_user, db, demo)
+    return _render_coordination_dashboard(request, current_user, db, demo, q=q, status=status)
 
 
 # Preview dev
@@ -315,18 +434,44 @@ def _render_coordination_reports(
     filters: dict[str, Any],
     demo: bool,
 ) -> HTMLResponse:
-    # Defaults
+    # Defaults + quick ranges
     today = date.today()
     default_from = today.replace(day=1)  # início do mês
-    date_from = parse_iso(filters.get("date_from")) or default_from
-    date_to = parse_iso(filters.get("date_to")) or today
+    quick = (filters.get("range") or "").lower()
+    if quick == "today":
+        date_from = today
+        date_to = today
+    elif quick == "week":
+        date_from = start_of_week(today)
+        date_to = end_of_week(today)
+    elif quick == "month":
+        date_from = default_from
+        # fim do mês: pega início do próximo mês - 1 dia
+        from calendar import monthrange
+
+        last_day = monthrange(today.year, today.month)[1]
+        date_to = today.replace(day=last_day)
+    else:
+        date_from = parse_iso(filters.get("date_from")) or default_from
+        date_to = parse_iso(filters.get("date_to")) or today
     group_by = filters.get("group_by") or "day"
     service_id = filters.get("service_id") or None
     professional_id = filters.get("professional_id") or None
     status = filters.get("status") or None
 
-    services = SERVICES
-    professionals = PROS
+    # Opções de filtro
+    if demo:
+        services = SERVICES
+        professionals = PROS
+    else:
+        services = [
+            {"id": s or "(sem descrição)", "name": s or "(sem descrição)"}
+            for (s,) in db.query(Appointment.service).distinct().order_by(Appointment.service).all()
+        ]
+        professionals = [
+            {"id": p.id, "name": p.name or getattr(p.user, "name", None) or f"Profissional {p.id}"}
+            for p in db.query(Professional).order_by(Professional.name).all()
+        ]
 
     rows: list[dict[str, Any]] = []
     kpis = {"total": 0, "confirmed": 0, "canceled": 0, "attendance_rate": 0.0}
@@ -354,20 +499,168 @@ def _render_coordination_reports(
             if total_all
             else 0.0,
         }
+    else:
+        # Dados reais
+        from sqlalchemy import func, case
+        from datetime import UTC, datetime
+        from zoneinfo import ZoneInfo
 
-    persist_query = build_persist_query(
-        request,
-        keep=[
-            "date_from",
-            "date_to",
-            "group_by",
-            "service_id",
-            "professional_id",
-            "status",
-        ],
+        tz = ZoneInfo("America/Sao_Paulo")
+        start_dt = datetime.combine(date_from, time.min, tzinfo=tz).astimezone(UTC)
+        end_dt = datetime.combine(date_to, time.max, tzinfo=tz).astimezone(UTC)
+
+        base = db.query(Appointment).filter(
+            Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt
+        )
+        if service_id:
+            base = base.filter(Appointment.service == service_id)
+        if professional_id:
+            try:
+                pid = int(professional_id)
+            except Exception:
+                pid = None
+            if pid is not None:
+                base = base.filter(Appointment.professional_id == pid)
+        if status:
+            st = status.lower()
+            if st == "scheduled":
+                base = base.filter(Appointment.status == AppointmentStatus.SCHEDULED)
+            elif st == "confirmed":
+                base = base.filter(Appointment.status == AppointmentStatus.CONFIRMED)
+            elif st.startswith("cancel"):
+                base = base.filter(Appointment.status == AppointmentStatus.CANCELLED)
+            elif st in ("attended", "done", "past"):
+                base = base.filter(Appointment.status == AppointmentStatus.DONE)
+
+        # KPIs
+        total = base.count()
+        confirmed = base.filter(Appointment.status == AppointmentStatus.CONFIRMED).count()
+        canceled = base.filter(Appointment.status == AppointmentStatus.CANCELLED).count()
+        attended = base.filter(Appointment.status == AppointmentStatus.DONE).count()
+        kpis = {
+            "total": int(total),
+            "confirmed": int(confirmed),
+            "canceled": int(canceled),
+            "attendance_rate": round((attended / total * 100.0), 1) if total else 0.0,
+        }
+
+        # Agrupamento
+        if group_by == "day":
+            dtexpr = func.date_trunc("day", Appointment.starts_at).label("d")
+            rows_raw = (
+                db.query(
+                    dtexpr,
+                    func.count().label("n"),
+                    func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
+                        "scheduled"
+                    ),
+                    func.sum(case((Appointment.status == AppointmentStatus.CONFIRMED, 1), else_=0)).label(
+                        "confirmed"
+                    ),
+                    func.sum(case((Appointment.status == AppointmentStatus.DONE, 1), else_=0)).label(
+                        "attended"
+                    ),
+                    func.sum(case((Appointment.status == AppointmentStatus.CANCELLED, 1), else_=0)).label(
+                        "canceled"
+                    ),
+                )
+                .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
+                .group_by(dtexpr)
+                .order_by(dtexpr)
+                .all()
+            )
+            rows = [
+                {
+                    "label": r.d.astimezone(tz).date().strftime("%d/%m/%Y"),
+                    "scheduled": int(r.scheduled or 0),
+                    "confirmed": int(r.confirmed or 0),
+                    "attended": int(r.attended or 0),
+                    "canceled": int(r.canceled or 0),
+                    "no_show": 0,
+                }
+                for r in rows_raw
+            ]
+        elif group_by == "service":
+            rows_raw = (
+                db.query(
+                    Appointment.service.label("label"),
+                    func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
+                        "scheduled"
+                    ),
+                    func.sum(case((Appointment.status == AppointmentStatus.CONFIRMED, 1), else_=0)).label(
+                        "confirmed"
+                    ),
+                    func.sum(case((Appointment.status == AppointmentStatus.DONE, 1), else_=0)).label(
+                        "attended"
+                    ),
+                    func.sum(case((Appointment.status == AppointmentStatus.CANCELLED, 1), else_=0)).label(
+                        "canceled"
+                    ),
+                )
+                .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
+                .group_by(Appointment.service)
+                .order_by(Appointment.service)
+                .all()
+            )
+            rows = [
+                {
+                    "label": r.label or "(sem descrição)",
+                    "scheduled": int(r.scheduled or 0),
+                    "confirmed": int(r.confirmed or 0),
+                    "attended": int(r.attended or 0),
+                    "canceled": int(r.canceled or 0),
+                    "no_show": 0,
+                }
+                for r in rows_raw
+            ]
+        else:  # professional
+            rows_raw = (
+                db.query(
+                    Professional.name.label("label"),
+                    func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
+                        "scheduled"
+                    ),
+                    func.sum(case((Appointment.status == AppointmentStatus.CONFIRMED, 1), else_=0)).label(
+                        "confirmed"
+                    ),
+                    func.sum(case((Appointment.status == AppointmentStatus.DONE, 1), else_=0)).label(
+                        "attended"
+                    ),
+                    func.sum(case((Appointment.status == AppointmentStatus.CANCELLED, 1), else_=0)).label(
+                        "canceled"
+                    ),
+                )
+                .join(Professional, Professional.id == Appointment.professional_id)
+                .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
+                .group_by(Professional.name)
+                .order_by(Professional.name)
+                .all()
+            )
+            rows = [
+                {
+                    "label": r.label or "(Profissional)",
+                    "scheduled": int(r.scheduled or 0),
+                    "confirmed": int(r.confirmed or 0),
+                    "attended": int(r.attended or 0),
+                    "canceled": int(r.canceled or 0),
+                    "no_show": 0,
+                }
+                for r in rows_raw
+            ]
+
+    persist_query = urlencode(
+        {
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "group_by": group_by,
+            "service_id": service_id or "",
+            "professional_id": professional_id or "",
+            "status": status or "",
+        }
     )
 
     ctx = {
+        "current_user": current_user,
         "filters": {
             "date_from": date_from.isoformat(),
             "date_to": date_to.isoformat(),
@@ -406,6 +699,7 @@ def ui_coordination_reports(
         "service_id": service_id,
         "professional_id": professional_id,
         "status": status,
+        "range": request.query_params.get("range"),
     }
     return _render_coordination_reports(request, current_user, db, filters, demo)
 
@@ -449,35 +743,129 @@ def export_coordination_reports_csv(
     status: str | None = Query(None),
     demo: bool = Query(False),
 ):
-    # Mesmo filtro da tela:
+    # Mesmo filtro da tela (real data)
     today = date.today()
     default_from = today.replace(day=1)
     df = parse_iso(date_from) or default_from
     dt = parse_iso(date_to) or today
 
-    rows: list[dict[str, Any]] = []
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
 
-    if demo:
-        items = demo_appointments(today)
-    else:
-        items = []  # TODO: troque por sua query real
+    tz = ZoneInfo("America/Sao_Paulo")
+    start_dt = datetime.combine(df, time.min, tzinfo=tz).astimezone(UTC)
+    end_dt = datetime.combine(dt, time.max, tzinfo=tz).astimezone(UTC)
 
-    items = filter_items(items, df, dt, service_id, professional_id, status)
-    rows, totals = aggregate(items, group_by)
+    base = db.query(Appointment).filter(
+        Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt
+    )
+    if service_id:
+        base = base.filter(Appointment.service == service_id)
+    if professional_id:
+        try:
+            pid = int(professional_id)
+        except Exception:
+            pid = None
+        if pid is not None:
+            base = base.filter(Appointment.professional_id == pid)
+    if status:
+        st = status.lower()
+        if st == "scheduled":
+            base = base.filter(Appointment.status == AppointmentStatus.SCHEDULED)
+        elif st == "confirmed":
+            base = base.filter(Appointment.status == AppointmentStatus.CONFIRMED)
+        elif st.startswith("cancel"):
+            base = base.filter(Appointment.status == AppointmentStatus.CANCELLED)
+        elif st in ("attended", "done", "past"):
+            base = base.filter(Appointment.status == AppointmentStatus.DONE)
 
-    # CSV
+    # Agrupar conforme group_by
     buf = StringIO()
-    buf.write("label,scheduled,confirmed,attended,canceled,no_show,amount\n")
-    for r in rows:
-        # amount no CSV vai numérico com ponto (sem R$)
-        # r["amount"] é string R$ — vamos recalcular pelo totals de cada linha:
-        # como r["amount"] veio formatado, precisamos somar de novo ou guardar bruto; mais simples: tira símbolos
-        amt_str = (
-            r["amount"].replace("R$", "").strip().replace(".", "").replace(",", ".")
+    buf.write("label,scheduled,confirmed,attended,canceled,no_show\n")
+
+    if group_by == "day":
+        dtexpr = func.date_trunc("day", Appointment.starts_at)
+        rows = (
+            db.query(
+                dtexpr.label("label"),
+                func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
+                    "scheduled"
+                ),
+                func.sum(case((Appointment.status == AppointmentStatus.CONFIRMED, 1), else_=0)).label(
+                    "confirmed"
+                ),
+                func.sum(case((Appointment.status == AppointmentStatus.DONE, 1), else_=0)).label(
+                    "attended"
+                ),
+                func.sum(case((Appointment.status == AppointmentStatus.CANCELLED, 1), else_=0)).label(
+                    "canceled"
+                ),
+            )
+            .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
+            .group_by(dtexpr)
+            .order_by(dtexpr)
+            .all()
         )
-        buf.write(
-            f'{r["label"]},{r["scheduled"]},{r["confirmed"]},{r["attended"]},{r["canceled"]},{r["no_show"]},{amt_str}\n'
+        for r in rows:
+            label = r.label.astimezone(tz).date().isoformat()
+            buf.write(
+                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\n"
+            )
+    elif group_by == "service":
+        rows = (
+            db.query(
+                Appointment.service.label("label"),
+                func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
+                    "scheduled"
+                ),
+                func.sum(case((Appointment.status == AppointmentStatus.CONFIRMED, 1), else_=0)).label(
+                    "confirmed"
+                ),
+                func.sum(case((Appointment.status == AppointmentStatus.DONE, 1), else_=0)).label(
+                    "attended"
+                ),
+                func.sum(case((Appointment.status == AppointmentStatus.CANCELLED, 1), else_=0)).label(
+                    "canceled"
+                ),
+            )
+            .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
+            .group_by(Appointment.service)
+            .order_by(Appointment.service)
+            .all()
         )
+        for r in rows:
+            label = r.label or "(sem descrição)"
+            buf.write(
+                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\n"
+            )
+    else:  # professional
+        rows = (
+            db.query(
+                Professional.name.label("label"),
+                func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
+                    "scheduled"
+                ),
+                func.sum(case((Appointment.status == AppointmentStatus.CONFIRMED, 1), else_=0)).label(
+                    "confirmed"
+                ),
+                func.sum(case((Appointment.status == AppointmentStatus.DONE, 1), else_=0)).label(
+                    "attended"
+                ),
+                func.sum(case((Appointment.status == AppointmentStatus.CANCELLED, 1), else_=0)).label(
+                    "canceled"
+                ),
+            )
+            .join(Professional, Professional.id == Appointment.professional_id)
+            .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
+            .group_by(Professional.name)
+            .order_by(Professional.name)
+            .all()
+        )
+        for r in rows:
+            label = r.label or "(Profissional)"
+            buf.write(
+                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\n"
+            )
 
     filename = f'reports_{group_by}_{df.strftime("%Y%m%d")}_{dt.strftime("%Y%m%d")}.csv'
     headers = {

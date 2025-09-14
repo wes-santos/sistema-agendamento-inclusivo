@@ -15,12 +15,13 @@ from app.models.user import Role, User
 
 
 def _extract_token_from_request(request: Request) -> str | None:
-    # Priority: Authorization header, then cookie (if enabled)
+    # Priority: Authorization header, then cookie (always as fallback)
     auth = request.headers.get("Authorization")
     if auth and auth.lower().startswith("bearer "):
         return auth.split(" ", 1)[1]
-    if settings.USE_COOKIE_AUTH:
-        return request.cookies.get("access_token")
+    cookie = request.cookies.get("access_token")
+    if cookie:
+        return cookie
     return None
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -11,6 +11,8 @@ from app.core.settings import settings
 from app.db.session import get_db
 from app.deps import require_roles
 from app.models.user import Role, User
+from app.models.appointment import Appointment, AppointmentStatus
+from app.models.professional import Professional
 from app.web.templating import render
 
 router = APIRouter()
@@ -161,6 +163,122 @@ def _render_professional_dashboard(
         # KPIs simples últimos 30 dias (fake)
         kpis["attended_30d"] = 12
         kpis["no_show_30d"] = 2
+    else:
+        # Dados reais: sessões do profissional vinculado ao usuário
+        from zoneinfo import ZoneInfo
+
+        tz = ZoneInfo("America/Sao_Paulo")
+        now = datetime.now(UTC)
+        prof = (
+            db.query(Professional)
+            .filter(Professional.user_id == current_user.id)
+            .one_or_none()
+        )
+        prof_id = prof.id if prof else None
+        if prof_id is not None:
+            # Próxima sessão
+            ap = (
+                db.query(Appointment)
+                .filter(
+                    Appointment.professional_id == prof_id,
+                    Appointment.starts_at >= now,
+                )
+                .order_by(Appointment.starts_at.asc())
+                .first()
+            )
+            if ap:
+                next_session = {
+                    "id": ap.id,
+                    "client_name": "Aluno",
+                    "service_name": ap.service,
+                    "starts_at_human": ap.starts_at.astimezone(tz).strftime(
+                        "%d/%m %H:%M"
+                    ),
+                    **to_local_labels(ap.starts_at, ap.ends_at),
+                    "location": ap.location,
+                    "status": (
+                        "confirmed"
+                        if ap.status == AppointmentStatus.CONFIRMED
+                        else (
+                            "canceled"
+                            if ap.status == AppointmentStatus.CANCELLED
+                            else ("past" if ap.status == AppointmentStatus.DONE else "scheduled")
+                        )
+                    ),
+                    "start_url": None,
+                    "cancel_url": None,
+                }
+
+            # Hoje
+            start_today = (
+                datetime.combine(today, time.min, tzinfo=tz).astimezone(UTC)
+            )
+            end_today = (
+                datetime.combine(today, time.max, tzinfo=tz).astimezone(UTC)
+            )
+            todays = (
+                db.query(Appointment)
+                .filter(
+                    Appointment.professional_id == prof_id,
+                    Appointment.starts_at >= start_today,
+                    Appointment.starts_at <= end_today,
+                )
+                .order_by(Appointment.starts_at.asc())
+                .all()
+            )
+            for ap in todays:
+                today_sessions.append(
+                    {
+                        "id": ap.id,
+                        "client_name": "Aluno",
+                        "service_name": ap.service,
+                        **to_local_labels(ap.starts_at, ap.ends_at),
+                        "status": (
+                            "confirmed"
+                            if ap.status == AppointmentStatus.CONFIRMED
+                            else (
+                                "canceled"
+                                if ap.status == AppointmentStatus.CANCELLED
+                                else ("past" if ap.status == AppointmentStatus.DONE else "scheduled")
+                            )
+                        ),
+                        "start_url": None,
+                        "cancel_url": None,
+                    }
+                )
+            kpis["today"] = len(todays)
+
+            # Semana
+            ws = start_of_week(today)
+            we = ws + timedelta(days=6)
+            start_week = (
+                datetime.combine(ws, time.min, tzinfo=tz).astimezone(UTC)
+            )
+            end_week = (
+                datetime.combine(we, time.max, tzinfo=tz).astimezone(UTC)
+            )
+            kpis["week"] = (
+                db.query(Appointment)
+                .filter(
+                    Appointment.professional_id == prof_id,
+                    Appointment.starts_at >= start_week,
+                    Appointment.starts_at <= end_week,
+                )
+                .count()
+            )
+
+            # Últimos 30 dias — DONE como compareceu, no_show não mapeado (0)
+            start_30d_ago = now - timedelta(days=30)
+            kpis["attended_30d"] = (
+                db.query(Appointment)
+                .filter(
+                    Appointment.professional_id == prof_id,
+                    Appointment.starts_at >= start_30d_ago,
+                    Appointment.status == AppointmentStatus.DONE,
+                )
+                .count()
+            )
+            kpis["no_show_30d"] = 0
 
     ctx = {
         "request": request,

@@ -35,50 +35,49 @@
 {# FILTROS (GET) #}
 <div class="filters-sticky">
     <form class="filters-bar" method="get" action="/family/appointments">
-        {{ select(
-        name="service_id",
-        label="Serviço",
-        options=services,
-        option_value="id",
-        option_label="name",
-        value=(filters.service_id if filters is defined else ''),
-        placeholder="Todos"
-        ) }}
+        <div class="filters-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;align-items:end;">
+            {{ select(
+                name="service_id",
+                label="Serviço",
+                options=services,
+                option_value="id",
+                option_label="name",
+                value=(filters.service_id if filters is defined else ''),
+                placeholder="Todos"
+            ) }}
 
-        {{ select(
-        name="status",
-        label="Status",
-        options=[{'value':'scheduled','label':'Agendado'},
-        {'value':'confirmed','label':'Confirmado'},
-        {'value':'canceled','label':'Cancelado'},
-        {'value':'past','label':'Encerrado'}],
-        value=(filters.status if filters is defined else ''),
-        placeholder="Todos"
-        ) }}
+            {{ select(
+                name="status",
+                label="Status",
+                options=[{'value':'scheduled','label':'Agendado'},{'value':'confirmed','label':'Confirmado'},{'value':'canceled','label':'Cancelado'},{'value':'past','label':'Encerrado'}],
+                value=(filters.status if filters is defined else ''),
+                placeholder="Todos"
+            ) }}
 
-        {{ input_text(
-        name="date_from",
-        type="date",
-        label="De",
-        value=(filters.date_from if filters is defined else '')
-        ) }}
+            {{ input_text(
+                name="date_from",
+                type="date",
+                label="De",
+                value=(filters.date_from if filters is defined else '')
+            ) }}
 
-        {{ input_text(
-        name="date_to",
-        type="date",
-        label="Até",
-        value=(filters.date_to if filters is defined else '')
-        ) }}
+            {{ input_text(
+                name="date_to",
+                type="date",
+                label="Até",
+                value=(filters.date_to if filters is defined else '')
+            ) }}
+        </div>
 
-        <div class="field">
+        <div class="field" style="margin-top:0.5rem;">
             <label class="field__label">&nbsp;</label>
-            <div class="field__control hstack gap-2">
-                <button class="btn" type="submit">Filtrar</button>
+            <div class="field__control hstack gap-2" style="justify-content:flex-end;">
+                <button class="btn" type="submit">Aplicar filtros</button>
                 <a class="btn btn--ghost" href="/family/appointments">Limpar</a>
             </div>
         </div>
     </form>
-</div>
+    </div>
 
 {# PREPARO DAS COLUNAS #}
 {% set columns = [
@@ -99,6 +98,7 @@
 {# HTML das ações (confirmar/cancelar quando aplicável) #}
 {% set _actions_html %}
 <div class="row-actions">
+    <a class="btn btn--ghost btn--sm" href="/family/appointments/{{ a.id }}">Detalhes</a>
     {% if a.confirm_url %}
     <a class="btn btn--success btn--sm" href="{{ a.confirm_url }}">Confirmar</a>
     {% endif %}
@@ -117,10 +117,10 @@
 'professional_name': a.professional_name,
 'starts_at_local': a.starts_at_local,
 'ends_at_local': a.ends_at_local,
-'status': a.status, # valor plain (fallback)
+'status': a.status,
 '_html': {
-'status': _status_html, # usa o badge
-'actions': _actions_html # botões
+'status': _status_html,
+'actions': _actions_html
 }
 }) %}
 {% endfor %}
