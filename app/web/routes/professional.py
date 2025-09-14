@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime, time, timedelta
+from urllib.parse import urlencode
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import func, case
 
 from app.core.settings import settings
 from app.db.session import get_db
@@ -41,14 +43,41 @@ def timeslots(start_h=8, end_h=18) -> list[str]:
     return [f"{h:02d}:00" for h in range(start_h, end_h)]
 
 
-def build_nav_urls(base_path: str, base_date: date, view: str) -> dict[str, str]:
-    prev = base_date - timedelta(days=1 if view == "day" else 7)
-    next_ = base_date + timedelta(days=1 if view == "day" else 7)
-    today = date.today()
+def build_nav_urls_range(
+    base_path: str,
+    *,
+    view: str,
+    date_from: date,
+    date_to: date | None,
+    persist: dict | None = None,
+) -> dict[str, str]:
+    persist = {k: v for (k, v) in (persist or {}).items() if v not in (None, "")}
+
+    def _url(df: date, dt: date | None) -> str:
+        params = {"view": view, **persist}
+        params["date_from"] = df.isoformat()
+        if dt:
+            params["date_to"] = dt.isoformat()
+        return f"{base_path}?{urlencode(params)}"
+
+    step = 1 if view == "day" else 7
+    prev_df = date_from - timedelta(days=step)
+    prev_dt = (date_to - timedelta(days=step)) if date_to else None
+    next_df = date_from + timedelta(days=step)
+    next_dt = (date_to + timedelta(days=step)) if date_to else None
+
+    # today
+    t = date.today()
+    if view == "day":
+        today_df, today_dt = t, None
+    else:
+        ws = start_of_week(t)
+        today_df, today_dt = ws, ws + timedelta(days=6)
+
     return {
-        "prev_url": f"{base_path}?date={prev.isoformat()}&view={view}",
-        "next_url": f"{base_path}?date={next_.isoformat()}&view={view}",
-        "today_url": f"{base_path}?date={today.isoformat()}&view={view}",
+        "prev_url": _url(prev_df, prev_dt),
+        "next_url": _url(next_df, next_dt),
+        "today_url": _url(today_df, today_dt),
     }
 
 
@@ -182,6 +211,7 @@ def _render_professional_dashboard(
                 .filter(
                     Appointment.professional_id == prof_id,
                     Appointment.starts_at >= now,
+                    Appointment.status == AppointmentStatus.SCHEDULED,
                 )
                 .order_by(Appointment.starts_at.asc())
                 .first()
@@ -406,25 +436,59 @@ def _render_professional_schedule(
 ) -> HTMLResponse:
     # filtros
     view = filters.get("view") or "week"
-    try:
-        base_date = date.fromisoformat(filters.get("date") or date.today().isoformat())
-    except Exception:
-        base_date = date.today()
+    # parse date range
+    df_str = (filters.get("date_from") or "").strip()
+    dt_str = (filters.get("date_to") or "").strip()
+    def _parse_date(s: str | None, fallback: date) -> date:
+        try:
+            return date.fromisoformat(s) if s else fallback
+        except Exception:
+            return fallback
+    today_d = date.today()
+    if view == "day":
+        base_date = _parse_date(df_str, today_d)
+        range_from = base_date
+        range_to: date | None = None
+    else:
+        # week
+        if df_str and dt_str:
+            range_from = _parse_date(df_str, today_d)
+            range_to = _parse_date(dt_str, range_from + timedelta(days=6))
+        else:
+            ws = start_of_week(today_d)
+            range_from, range_to = ws, ws + timedelta(days=6)
 
+    # Services list (fallback static; replaced with DB values below if available)
     services = [
         {"id": "fono", "name": "Fonoaudiologia"},
         {"id": "psico", "name": "Psicopedagogia"},
         {"id": "neuro", "name": "Neuropsicologia"},
     ]
 
-    nav = build_nav_urls("/professional/schedule", base_date, view)
+    if view == "day":
+        nav = build_nav_urls_range(
+            "/professional/schedule",
+            view=view,
+            date_from=base_date,
+            date_to=None,
+            persist=filters,
+        )
+    else:
+        nav = build_nav_urls_range(
+            "/professional/schedule",
+            view=view,
+            date_from=range_from,
+            date_to=range_to,
+            persist=filters,
+        )
 
     context = {
         "request": request,
         "current_user": current_user,
         "app_version": getattr(settings, "APP_VERSION", "dev"),
         "filters": {
-            "date": base_date.isoformat(),
+            "date_from": (range_from if view == "week" else base_date).isoformat(),
+            "date_to": (range_to.isoformat() if (view == "week" and range_to) else ""),
             "view": view,
             "service_id": filters.get("service_id", ""),
         },
@@ -434,10 +498,130 @@ def _render_professional_schedule(
         "week": None,
     }
 
-    if view == "day":
+    # Real data when possible (fallback to demo renderer)
+    if not demo and db and current_user:
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo("America/Sao_Paulo")
+
+        # resolve professional id
+        prof = (
+            db.query(Professional)
+            .filter(Professional.user_id == current_user.id)
+            .one_or_none()
+        )
+        prof_id = prof.id if prof else None
+
+        if prof_id is None:
+            # keep empty grids
+            pass
+        else:
+            # replace services with distinct values from DB for this professional
+            try:
+                db_services = (
+                    db.query(Appointment.service)
+                    .filter(Appointment.professional_id == prof_id)
+                    .distinct()
+                    .order_by(Appointment.service.asc())
+                    .all()
+                )
+                services = [
+                    {"id": s or "", "name": s or "(sem descrição)"} for (s,) in db_services
+                ]
+            except Exception:
+                services = []
+            # window
+            if view == "day":
+                start_local = datetime.combine(base_date, time.min, tzinfo=tz)
+                end_local = datetime.combine(base_date, time.max, tzinfo=tz)
+            else:
+                ws = range_from
+                start_local = datetime.combine(ws, time.min, tzinfo=tz)
+                if range_to:
+                    end_local = datetime.combine(range_to, time.max, tzinfo=tz)
+                else:
+                    end_local = start_local + timedelta(days=7) - timedelta(microseconds=1)
+
+            start_utc = start_local.astimezone(UTC)
+            end_utc = end_local.astimezone(UTC)
+
+            q = (
+                db.query(Appointment)
+                .filter(
+                    Appointment.professional_id == prof_id,
+                    Appointment.starts_at >= start_utc,
+                    Appointment.starts_at <= end_utc,
+                )
+                .order_by(Appointment.starts_at.asc())
+            )
+            svc = (filters.get("service_id") or "").strip()
+            if svc:
+                q = q.filter(Appointment.service == svc)
+
+            appts = q.all()
+
+            def _label_hm(dt: datetime) -> str:
+                return dt.astimezone(tz).strftime("%H:%M")
+
+            if view == "day":
+                rows = []
+                # slots hourly
+                for h in range(8, 18):
+                    slot_label = f"{h:02d}:00"
+                    # appointments starting within this hour
+                    items = []
+                    for ap in appts:
+                        lt = ap.starts_at.astimezone(tz)
+                        if lt.hour == h:
+                            items.append(
+                                {
+                                    "client_name": "Aluno",
+                                    "service_name": ap.service,
+                                    "starts_at_local": _label_hm(ap.starts_at),
+                                    "ends_at_local": _label_hm(ap.ends_at),
+                                }
+                            )
+                    state = "is-busy" if items else "is-free"
+                    rows.append({"label": slot_label, "slot": {"state": state, "items": items}})
+                context["day_rows"] = rows
+            else:
+                # week grid
+                week = {"days": [], "rows": []}
+                ws = range_from
+                week["days"] = [
+                    {"label": f"{PT_WEEKDAYS_SHORT[i]} # {fmt_dmy(ws + timedelta(days=i))}"}
+                    for i in range(7)
+                ]
+                # map appointments by (day_index, hour)
+                ap_map: dict[tuple[int, int], list[Appointment]] = {}
+                for ap in appts:
+                    lt = ap.starts_at.astimezone(tz)
+                    day_idx = (lt.date() - ws).days
+                    if 0 <= day_idx <= 6:
+                        ap_map.setdefault((day_idx, lt.hour), []).append(ap)
+                for h in range(8, 18):
+                    cells = []
+                    for day_idx in range(7):
+                        items = []
+                        for ap in ap_map.get((day_idx, h), []):
+                            items.append(
+                                {
+                                    "client_name": "Aluno",
+                                    "service_name": ap.service,
+                                    "starts_at_local": _label_hm(ap.starts_at),
+                                    "ends_at_local": _label_hm(ap.ends_at),
+                                }
+                            )
+                        state = "is-busy" if items else "is-free"
+                        cells.append({"state": state, "items": items})
+                    week["rows"].append({"label": f"{h:02d}:00", "cells": cells})
+                context["week"] = week
+
+    # Fallback demo rendering if no real data was constructed
+    if view == "day" and context["day_rows"] is None:
         context["day_rows"] = _day_payload(base_date, demo)
-    else:
-        context["week"] = _week_payload(base_date, demo)
+    if view != "day" and context["week"] is None:
+        # build demo week using range_from
+        context["week"] = _week_payload(range_from, demo)
 
     return render(request, "pages/professional/schedule.html", context)
 
@@ -447,12 +631,13 @@ def ui_professional_schedule(
     request: Request,
     current_user: User = Depends(require_roles(Role.PROFESSIONAL)),
     db: Session = Depends(get_db),
-    date_str: str | None = Query(None, alias="date"),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
     view: str = Query("week", pattern="^(day|week)$"),
     service_id: str | None = Query(None),
     demo: bool = Query(False),
 ):
-    filters = {"date": date_str, "view": view, "service_id": service_id}
+    filters = {"date_from": date_from, "date_to": date_to, "view": view, "service_id": service_id}
     return _render_professional_schedule(request, current_user, db, filters, demo)
 
 
@@ -467,3 +652,175 @@ def preview_professional_schedule(
 ):
     filters = {"date": date_str, "view": view, "service_id": service_id}
     return _render_professional_schedule(request, None, None, filters, demo)
+
+
+# --------------------------
+# Render: REPORTS (profissional)
+# --------------------------
+def _render_professional_reports(
+    request: Request,
+    current_user: User,
+    db: Session,
+    *,
+    date_from: str | None,
+    date_to: str | None,
+    group_by: str,
+):
+    from zoneinfo import ZoneInfo
+    tz = ZoneInfo("America/Sao_Paulo")
+
+    # Resolve professional linked to current user
+    prof = (
+        db.query(Professional)
+        .filter(Professional.user_id == current_user.id)
+        .one_or_none()
+    )
+    prof_id = prof.id if prof else None
+
+    # Dates (defaults = current month)
+    today = date.today()
+    if not date_from:
+        df = today.replace(day=1)
+    else:
+        try:
+            df = date.fromisoformat(date_from)
+        except Exception:
+            df = today.replace(day=1)
+    if not date_to:
+        dt = today
+    else:
+        try:
+            dt = date.fromisoformat(date_to)
+        except Exception:
+            dt = today
+
+    start_dt = datetime.combine(df, time.min, tzinfo=tz).astimezone(UTC)
+    end_dt = datetime.combine(dt, time.max, tzinfo=tz).astimezone(UTC)
+
+    rows: list[dict] = []
+    kpis = {"total": 0, "confirmed": 0, "canceled": 0, "attended": 0}
+
+    if prof_id is not None:
+        base = db.query(Appointment).filter(
+            Appointment.professional_id == prof_id,
+            Appointment.starts_at >= start_dt,
+            Appointment.starts_at <= end_dt,
+        )
+
+        # KPIs
+        kpis["total"] = base.count()
+        kpis["confirmed"] = base.filter(
+            Appointment.status == AppointmentStatus.CONFIRMED
+        ).count()
+        kpis["canceled"] = base.filter(
+            Appointment.status == AppointmentStatus.CANCELLED
+        ).count()
+        kpis["attended"] = base.filter(
+            Appointment.status == AppointmentStatus.DONE
+        ).count()
+
+        # Grouping
+        if group_by == "day":
+            dtexpr = func.date_trunc("day", Appointment.starts_at)
+            rows_raw = (
+                db.query(
+                    dtexpr.label("label"),
+                    func.sum(
+                        case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)
+                    ).label("scheduled"),
+                    func.sum(
+                        case((Appointment.status == AppointmentStatus.CONFIRMED, 1), else_=0)
+                    ).label("confirmed"),
+                    func.sum(
+                        case((Appointment.status == AppointmentStatus.DONE, 1), else_=0)
+                    ).label("attended"),
+                    func.sum(
+                        case((Appointment.status == AppointmentStatus.CANCELLED, 1), else_=0)
+                    ).label("canceled"),
+                )
+                .filter(
+                    Appointment.professional_id == prof_id,
+                    Appointment.starts_at >= start_dt,
+                    Appointment.starts_at <= end_dt,
+                )
+                .group_by(dtexpr)
+                .order_by(dtexpr)
+                .all()
+            )
+            rows = [
+                {
+                    "label": r.label.astimezone(tz).date().strftime("%d/%m/%Y"),
+                    "scheduled": int(r.scheduled or 0),
+                    "confirmed": int(r.confirmed or 0),
+                    "attended": int(r.attended or 0),
+                    "canceled": int(r.canceled or 0),
+                }
+                for r in rows_raw
+            ]
+        else:  # service
+            rows_raw = (
+                db.query(
+                    Appointment.service.label("label"),
+                    func.sum(
+                        case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)
+                    ).label("scheduled"),
+                    func.sum(
+                        case((Appointment.status == AppointmentStatus.CONFIRMED, 1), else_=0)
+                    ).label("confirmed"),
+                    func.sum(
+                        case((Appointment.status == AppointmentStatus.DONE, 1), else_=0)
+                    ).label("attended"),
+                    func.sum(
+                        case((Appointment.status == AppointmentStatus.CANCELLED, 1), else_=0)
+                    ).label("canceled"),
+                )
+                .filter(
+                    Appointment.professional_id == prof_id,
+                    Appointment.starts_at >= start_dt,
+                    Appointment.starts_at <= end_dt,
+                )
+                .group_by(Appointment.service)
+                .order_by(Appointment.service)
+                .all()
+            )
+            rows = [
+                {
+                    "label": r.label or "(sem descrição)",
+                    "scheduled": int(r.scheduled or 0),
+                    "confirmed": int(r.confirmed or 0),
+                    "attended": int(r.attended or 0),
+                    "canceled": int(r.canceled or 0),
+                }
+                for r in rows_raw
+            ]
+
+    ctx = {
+        "current_user": current_user,
+        "filters": {
+            "date_from": df.isoformat(),
+            "date_to": dt.isoformat(),
+            "group_by": group_by,
+        },
+        "kpis": kpis,
+        "rows": rows,
+    }
+    return render(request, "pages/professional/reports.html", ctx)
+
+
+@router.get("/professional/reports", response_class=HTMLResponse)
+def ui_professional_reports(
+    request: Request,
+    current_user: User = Depends(require_roles(Role.PROFESSIONAL)),
+    db: Session = Depends(get_db),
+    date_from: str | None = Query(None),
+    date_to: str | None = Query(None),
+    group_by: str = Query("day", pattern="^(day|service)$"),
+):
+    return _render_professional_reports(
+        request,
+        current_user,
+        db,
+        date_from=date_from,
+        date_to=date_to,
+        group_by=group_by,
+    )

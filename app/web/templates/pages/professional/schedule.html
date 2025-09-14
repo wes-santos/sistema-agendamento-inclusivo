@@ -21,11 +21,18 @@
 {# Controles (sticky) #}
 <section class="sched-controls">
     <form method="get" class="sched-controls__form">
-        <div class="hstack gap-2">
+        <div class="filters-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;align-items:end;">
             <div class="field">
-                <label class="field__label" for="date">Data</label>
+                <label class="field__label" for="date_from">De</label>
                 <div class="field__control">
-                    <input id="date" name="date" type="date" class="input" value="{{ filters.date|default('') }}">
+                    <input id="date_from" name="date_from" type="date" class="input" value="{{ filters.date_from|default('') }}">
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="date_to">Até</label>
+                <div class="field__control">
+                    <input id="date_to" name="date_to" type="date" class="input" value="{{ filters.date_to|default('') }}">
                 </div>
             </div>
 
@@ -52,22 +59,17 @@
                 </div>
             </div>
 
-            <div class="field">
-                <label class="field__label">&nbsp;</label>
-                <div class="field__control btnbar">
-                    <a class="btn" data-nav="prev" href="{{ nav.prev_url }}">‹ Anterior</a>
-                    <a class="btn btn--ghost" data-nav="today" href="{{ nav.today_url }}">Hoje</a>
-                    <a class="btn" data-nav="next" href="{{ nav.next_url }}">Próximo ›</a>
-                </div>
-            </div>
-
-            <div class="field">
-                <label class="field__label">&nbsp;</label>
-                <div class="field__control">
-                    <button class="btn" type="submit">Aplicar</button>
-                </div>
-            </div>
         </div>
+
+            <div class="field" style="margin-top:.5rem;">
+                <label class="field__label">&nbsp;</label>
+            <div class="field__control btnbar" style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-end;">
+                <a class="btn btn--nav" data-nav="prev" href="{{ nav.prev_url }}" title="Semana anterior" aria-label="Semana anterior">‹</a>
+                <a class="btn btn--ghost btn--nav" data-nav="today" href="{{ nav.today_url }}" title="Ir para hoje" aria-label="Ir para hoje">●</a>
+                <a class="btn btn--nav" data-nav="next" href="{{ nav.next_url }}" title="Próxima semana" aria-label="Próxima semana">›</a>
+                <button class="btn" type="submit" title="Aplicar filtros">Aplicar</button>
+            </div>
+            </div>
     </form>
 </section>
 
