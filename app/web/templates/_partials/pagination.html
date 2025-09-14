@@ -1,28 +1,77 @@
-<nav class="card" aria-label="Paginação" style="padding:.5rem 1rem">
-  {# expects: page, total_pages, make_url(page) #}
-  <ul class="pagination">
-    <li>
+{# Uso flexível:
+Opção A (preferida): passe "pagination.page_url(page)" como callable que retorna a URL.
+Opção B: passe "pagination.base_url" e (opcional) "pagination.persist_query" já codificado (ex.:
+"status=confirmed&service=neuro").
+
+Espera: "pagination" = {
+page: int atual (1-based),
+pages: total de páginas,
+page_url?: callable(int)->str,
+base_url?: str,
+persist_query?: str
+}
+#}
+
+{% macro href_for(p) -%}
+{%- if pagination.page_url is defined and pagination.page_url -%}
+{{ pagination.page_url(p) }}
+{%- elif pagination.base_url is defined and pagination.base_url -%}
+{{ pagination.base_url }}?page={{ p }}{% if pagination.persist_query %}&{{ pagination.persist_query }}{% endif %}
+{%- else -%}
+?page={{ p }}
+{%- endif -%}
+{%- endmacro %}
+
+{% if pagination is defined and pagination.pages|int > 1 %}
+{% set page = pagination.page|int %}
+{% set pages = pagination.pages|int %}
+{% set window = 2 %} {# quantas páginas mostrar ao redor da atual #}
+
+<nav class="pager" role="navigation" aria-label="Paginação">
+  <ul class="pager__list">
+
+    {# Prev #}
+    <li class="pager__item">
       {% if page > 1 %}
-        <a href="{{ make_url(page-1) }}" rel="prev" aria-label="Página anterior">‹ Anterior</a>
+      <a class="pager__link pager__link--prev" href="{{ href_for(page - 1) }}" rel="prev"
+        aria-label="Página anterior">‹</a>
       {% else %}
-        <span aria-disabled="true" style="opacity:.6">‹ Anterior</span>
+      <span class="pager__link pager__link--disabled" aria-disabled="true">‹</span>
       {% endif %}
     </li>
-    {% for p in range(1, total_pages+1) %}
-      <li>
-        {% if p == page %}
-          <span class="current" aria-current="page">{{ p }}</span>
-        {% else %}
-          <a href="{{ make_url(p) }}">{{ p }}</a>
-        {% endif %}
-      </li>
+
+    {# Primeira + elipse #}
+    {% if page - window > 1 %}
+    <li class="pager__item"><a class="pager__link" href="{{ href_for(1) }}">1</a></li>
+    <li class="pager__item"><span class="pager__ellipsis" aria-hidden="true">…</span></li>
+    {% endif %}
+
+    {# Janela central #}
+    {% for p in range(max(1, page - window), min(pages, page + window) + 1) %}
+    <li class="pager__item">
+      {% if p == page %}
+      <span class="pager__link is-active" aria-current="page">{{ p }}</span>
+      {% else %}
+      <a class="pager__link" href="{{ href_for(p) }}">{{ p }}</a>
+      {% endif %}
+    </li>
     {% endfor %}
-    <li>
-      {% if page < total_pages %}
-        <a href="{{ make_url(page+1) }}" rel="next" aria-label="Próxima página">Próxima ›</a>
-      {% else %}
-        <span aria-disabled="true" style="opacity:.6">Próxima ›</span>
+
+    {# Elipse + última #}
+    {% if page + window < pages %} <li class="pager__item"><span class="pager__ellipsis" aria-hidden="true">…</span>
+      </li>
+      <li class="pager__item"><a class="pager__link" href="{{ href_for(pages) }}">{{ pages }}</a></li>
       {% endif %}
-    </li>
+
+      {# Next #}
+      <li class="pager__item">
+        {% if page < pages %} <a class="pager__link pager__link--next" href="{{ href_for(page + 1) }}" rel="next"
+          aria-label="Próxima página">›</a>
+          {% else %}
+          <span class="pager__link pager__link--disabled" aria-disabled="true">›</span>
+          {% endif %}
+      </li>
+
   </ul>
 </nav>
+{% endif %}

@@ -1,0 +1,69 @@
+/* Escopo geral das telas da Família */
+.page-family,
+.family {
+}
+
+/* HERO (próximo agendamento + ações rápidas) */
+.page-family .family-hero,
+.family .family-hero {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr; /* mobile empilhado */
+  margin: 0.5rem 0 1rem;
+}
+@media (min-width: 768px) {
+  .page-family .family-hero,
+  .family .family-hero {
+    grid-template-columns: 2fr 1fr; /* lado a lado */
+    align-items: stretch;
+  }
+}
+/* iguala alturas dos dois cards dentro do hero */
+.page-family .family-hero > .card,
+.family .family-hero > .card {
+  display: grid;
+  grid-template-rows: auto 1fr; /* header + body cresce */
+}
+.page-family .family-hero > .card .card__body,
+.family .family-hero > .card .card__body {
+  align-content: start;
+}
+
+/* Grid de KPIs */
+.page-family .family-cards,
+.family .family-cards {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr; /* 1 col no mobile */
+}
+@media (min-width: 700px) {
+  /* 2 col cedo */
+  .page-family .family-cards,
+  .family .family-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1000px) {
+  /* 3 col em telas médias */
+  .page-family .family-cards,
+  .family .family-cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1280px) {
+  /* 4 col em telas largas */
+  .page-family .family-cards,
+  .family .family-cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Densidade menor nos cards de KPI (mesmo componente, padding menor) */
+.page-family .family-cards .card__body,
+.family .family-cards .card__body {
+  padding: 0.8rem 1rem;
+}
+.page-family .family-cards .card__header,
+.family .family-cards .card__header {
+  padding: 0.7rem 1rem;
+}

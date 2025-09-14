@@ -1,0 +1,52 @@
+/* Escopo específico: Família > Meus agendamentos */
+.page-family-appointments,
+.family-appointments {
+  /* pode ficar vazio — serve de “gancho” para pagin específico */
+}
+
+/* Barra de filtros “sticky” sob a navbar */
+:root {
+  --nav-height: 56px;
+}
+.page-family-appointments .filters-sticky,
+.family-appointments .filters-sticky {
+  position: sticky;
+  top: calc(var(--nav-height) + 0.5rem);
+  z-index: 20;
+  background: var(--page);
+  padding-bottom: 0.5rem;
+}
+
+/* Ajustes de tabela nesta tela */
+.page-family-appointments .table .col-status,
+.family-appointments .table .col-status {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.page-family-appointments .table [data-col-key="actions"],
+.family-appointments .table [data-col-key="actions"] {
+  width: 1%;
+  white-space: nowrap;
+}
+.page-family-appointments .row-actions,
+.family-appointments .row-actions {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+/* Data/hora em coluna mais “condensada” */
+.page-family-appointments .table [data-col-key="starts_at"],
+.page-family-appointments .table [data-col-key="ends_at"],
+.family-appointments .table [data-col-key="starts_at"],
+.family-appointments .table [data-col-key="ends_at"] {
+  width: 10rem;
+  white-space: nowrap;
+}
+
+/* Empty state com respiro */
+.page-family-appointments .table__empty,
+.family-appointments .table__empty {
+  padding: 1.4rem 0;
+}

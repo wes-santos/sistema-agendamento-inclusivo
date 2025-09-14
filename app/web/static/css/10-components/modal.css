@@ -1,0 +1,52 @@
+/* Modal baseado em <dialog> */
+.modal::backdrop {
+  background: color-mix(in oklab, #000 45%, transparent);
+}
+.modal {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+.modal__box {
+  width: min(92vw, 560px);
+  margin: 10vh auto;
+  background: var(--surface, #fff);
+  color: var(--text, #0a0a0a);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius, 0.75rem);
+  box-shadow: var(--shadow-lg, 0 12px 40px rgba(0, 0, 0, 0.2));
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
+}
+.modal__header,
+.modal__footer {
+  padding: 0.9rem 1rem;
+  background: var(--surface-1, #fafafa);
+}
+.modal__title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+.modal__body {
+  padding: 1rem;
+}
+.modal__close {
+  margin-left: auto;
+  background: transparent;
+  border: 0;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: var(--muted, #6b7280);
+}
+.modal__close:hover {
+  color: var(--text);
+}
+
+/* Variantes */
+.modal--confirm .modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

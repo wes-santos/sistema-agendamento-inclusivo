@@ -1,0 +1,127 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-coordination page-coordination-dashboard' %}
+
+{% from "components/card.html" import card %}
+{% from "components/badge.html" import status_badge %}
+{% from "components/empty_state.html" import empty_state %}
+{% from "_partials/modal.html" import confirm %}
+
+{% block title %}Dashboard — Coordenação{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/coordination.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = breadcrumbs if breadcrumbs is defined else [{'label':'Início'}] %}
+{% include "_partials/breadcrumbs.html" %}
+
+<section class="co-grid">
+
+    {# ESQUERDA — Fila de confirmações (LISTA, não tabela) #}
+    {% call card(title="Fila de confirmações", subtitle="Agendamentos aguardando retorno") %}
+    <form class="q-controls hstack gap-2 mb-2" method="get" action="/coordination/dashboard">
+        <input class="input" type="search" name="q" value="{{ request.query_params.get('q','') }}"
+            placeholder="Buscar família, serviço ou profissional">
+        <select class="select" name="status">
+            <option value="">Todos</option>
+            <option value="scheduled" {{ 'selected' if request.query_params.get('status')=='scheduled' }}>Agendado
+            </option>
+            <option value="confirmed" {{ 'selected' if request.query_params.get('status')=='confirmed' }}>Confirmado
+            </option>
+        </select>
+        <button class="btn" type="submit">Filtrar</button>
+    </form>
+    {% if queue and queue|length %}
+    <div class="queue" role="list">
+        {% for it in queue %}
+        <article class="queue__item" role="listitem" data-id="{{ it.id }}">
+            <div class="queue__when">
+                <div class="queue__label">Data</div>
+                <div class="queue__value">{{ it.starts_at_local }}</div>
+            </div>
+
+            <div class="queue__who">
+                <div class="queue__value">
+                    <div class="q-name ellipsis"><strong>{{ it.family_name }}</strong></div>
+                    <div class="q-meta ellipsis text-muted">{{ it.service_name }} — {{ it.professional_name }}</div>
+                </div>
+            </div>
+
+            <div class="queue__status">
+                <div class="queue__label">Status</div>
+                <div class="queue__value">{{ status_badge(it.status) }}</div>
+            </div>
+
+            <div class="queue__actions">
+                {% if it.confirm_url %}
+                <a class="btn btn--success btn--sm" href="{{ it.confirm_url }}">Confirmar</a>
+                {% endif %}
+                {% if it.remind_url %}
+                <a class="btn btn--secondary btn--sm" href="{{ it.remind_url }}">Lembrar</a>
+                {% endif %}
+                {% if it.cancel_url %}
+                <button class="btn btn--danger btn--sm" type="button" data-action="cancel"
+                    data-cancel-url="{{ it.cancel_url }}" data-appt-id="{{ it.id }}">
+                    Cancelar
+                </button>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    {{ empty_state(
+    title="Sem pendências",
+    message="Nenhum agendamento requer confirmação agora.",
+    actions_html='<a class="btn" href="/coordination/reports">Ver relatórios</a>',
+    icon="✅",
+    size="md"
+    ) }}
+    {% endif %}
+    {% endcall %}
+
+    {# DIREITA — Ações rápidas #}
+    {% call card(title="Ações rápidas") %}
+    <nav class="quick-actions">
+        <a class="btn btn--block" href="/coordination/reports">Relatórios</a>
+        <a class="btn btn--secondary btn--block" href="/coordination/reports?range=today">Hoje</a>
+        <a class="btn btn--secondary btn--block" href="/coordination/reports?range=week">Esta semana</a>
+        <a class="btn btn--secondary btn--block" href="/coordination/reports?range=month">Este mês</a>
+    </nav>
+    {% endcall %}
+</section>
+
+{# KPIs #}
+<section class="kpi-grid">
+    {{ card(title="A confirmar", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.to_confirm|default(0)) ~ '</div>
+        <div class="kpi__label">agendamentos</div>
+    </div>') }}
+    {{ card(title="Hoje", subtitle="Sessões", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.today|default(0)) ~ '</div>
+        <div class="kpi__label">marcadas</div>
+    </div>') }}
+    {{ card(title="Semana", subtitle="Sessões", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.week|default(0)) ~ '</div>
+        <div class="kpi__label">marcadas</div>
+    </div>') }}
+    {{ card(title="Canceladas", subtitle="Últimos 7 dias", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.canceled_7d|default(0)) ~ '</div>
+        <div class="kpi__label">no período</div>
+    </div>') }}
+</section>
+
+{{ confirm(id="cancel-modal",
+title="Cancelar agendamento",
+message="Confirmar cancelamento deste agendamento?",
+confirm_label="Cancelar",
+cancel_label="Voltar",
+destructive=True) }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/pages/family-appointments.js') }}?v={{ app_version|default('1') }}"
+    defer></script>
+{% endblock %}

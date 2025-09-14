@@ -1,0 +1,40 @@
+{# web/templates/pages/family/appointment_detail.html #}
+{% extends "_base/base.html" %}
+{% set body_class = 'page-family page-family-appointment-detail' %}
+{% from "components/card.html" import card %}
+{% from "components/badge.html" import status_badge %}
+
+{% block title %}Agendamento — Detalhes{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{'label':'Família', 'href':'/family/appointments'}, {'label':'Detalhes'}] %}
+{% include "_partials/breadcrumbs.html" %}
+
+{% call card(title=appointment.service_name, subtitle=appointment.professional_name) %}
+<dl class="dl grid-2">
+    <div>
+        <dt>Início</dt>
+        <dd>{{ appointment.starts_at_local }}</dd>
+    </div>
+    {% if appointment.ends_at_local %}<div>
+        <dt>Fim</dt>
+        <dd>{{ appointment.ends_at_local }}</dd>
+    </div>{% endif %}
+    {% if appointment.location %}<div>
+        <dt>Local</dt>
+        <dd>{{ appointment.location }}</dd>
+    </div>{% endif %}
+    <div>
+        <dt>Status</dt>
+        <dd>{{ status_badge(appointment.status) }}</dd>
+    </div>
+</dl>
+<div class="mt-4 hstack gap-2">
+    {% if appointment.confirm_url %}<a class="btn btn--success" href="{{ appointment.confirm_url }}">Confirmar
+        presença</a>{% endif %}
+    {% if appointment.cancel_url %}<a class="btn btn--danger" href="{{ appointment.cancel_url }}">Cancelar</a>{% endif
+    %}
+    <a class="btn btn--ghost" href="{{ url_for('family_appointments') }}">Voltar aos agendamentos</a>
+</div>
+{% endcall %}
+{% endblock %}

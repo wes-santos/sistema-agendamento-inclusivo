@@ -1,0 +1,104 @@
+/* Família > Dashboard */
+.page-family.page-family-dashboard .family-hero {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  margin: 0.5rem 0 1rem;
+}
+@media (min-width: 768px) {
+  .page-family.page-family-dashboard .family-hero {
+    grid-template-columns: 2fr 1fr;
+    align-items: stretch;
+  }
+}
+/* cards do HERO com mesma altura e densidade menor */
+.page-family.page-family-dashboard .family-hero > .card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+.page-family.page-family-dashboard .family-hero > .card .card__header {
+  padding: 0.7rem 1rem;
+}
+.page-family.page-family-dashboard .family-hero > .card .card__body {
+  padding: 0.8rem 1rem;
+  align-content: start;
+}
+
+/* Próximo agendamento: grid de áreas (main | meta | actions) */
+.page-family.page-family-dashboard .next-appt {
+  display: grid;
+  gap: 0.75rem 1rem;
+  grid-template-areas: "main" "meta" "actions";
+}
+@media (min-width: 900px) {
+  .page-family.page-family-dashboard .next-appt {
+    grid-template-columns: 1fr auto;
+    grid-template-areas: "main actions" "meta actions";
+    align-items: start;
+  }
+}
+.page-family.page-family-dashboard .next-appt__main {
+  grid-area: main;
+  display: grid;
+  gap: 0.4rem 1rem;
+  grid-template-columns: 1fr auto;
+  align-items: start;
+}
+.page-family.page-family-dashboard .next-appt__service {
+  min-width: 0;
+}
+.page-family.page-family-dashboard .next-appt__service strong {
+  font-size: 1.05rem;
+}
+.page-family.page-family-dashboard .next-appt__time {
+  text-align: right;
+  white-space: nowrap;
+}
+.page-family.page-family-dashboard .next-appt__meta {
+  grid-area: meta;
+  display: inline-flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+.page-family.page-family-dashboard .next-appt__actions {
+  grid-area: actions;
+  display: inline-flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Ações rápidas mais compactas */
+/* Ações rápidas em grid 2×2 (sem cortar botões) */
+.page-family.page-family-dashboard .quick-actions {
+  display: grid;
+  grid-auto-flow: row;
+  grid-template-columns: 1fr; /* mobile: 1 por linha */
+  gap: 0.5rem;
+}
+@media (min-width: 600px) {
+  .page-family.page-family-dashboard .quick-actions {
+    grid-template-columns: repeat(
+      2,
+      minmax(0, 1fr)
+    ); /* 2 colunas a partir de 600px */
+  }
+}
+
+/* KPIs com mesma “altura visual” */
+.page-family.page-family-dashboard .kpi {
+  display: grid;
+  gap: 0.2rem;
+  align-content: start;
+  min-height: 84px;
+}
+.page-family.page-family-dashboard .kpi__label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.page-family.page-family-dashboard .kpi__value {
+  font-weight: 800;
+  font-size: 1.35rem;
+}

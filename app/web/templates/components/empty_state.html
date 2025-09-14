@@ -1,0 +1,24 @@
+{# Estado vazio reutilizável (para listas/tabelas sem dados).
+Uso:
+{% from "components/empty_state.html" import empty_state %}
+{{ empty_state(title="Sem agendamentos", message="Você ainda não realizou nenhum agendamento.", actions_html='<a
+    class="btn" href="/...">Agendar</a>') }}
+
+Parâmetros:
+- icon: opcional (emoji ou <svg>), ex.: "📅"
+    - size: md | lg
+    #}
+    {% macro empty_state(title, message=None, actions_html=None, icon=None, size='md') -%}
+    <section class="empty empty--{{ size }}" role="region" aria-label="{{ title }}">
+        {% if icon %}
+        <div class="empty__icon" aria-hidden="true">{{ icon | safe }}</div>
+        {% endif %}
+        <h3 class="empty__title">{{ title }}</h3>
+        {% if message %}
+        <p class="empty__message">{{ message }}</p>
+        {% endif %}
+        {% if actions_html %}
+        <div class="empty__actions">{{ actions_html | safe }}</div>
+        {% endif %}
+    </section>
+    {%- endmacro %}

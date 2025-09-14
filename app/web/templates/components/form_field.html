@@ -1,0 +1,59 @@
+{# components/form_field.html #}
+
+{%- macro field_wrapper(name, label=None, required=False, help_text=None, error=None) -%}
+{# ids auxiliares de acessibilidade #}
+{% set hint_id = name ~ '__hint' %}
+{% set err_id = name ~ '__err' %}
+{% set described = [] %}
+{% if help_text %}{% do described.append(hint_id) %}{% endif %}
+{% if error %}{% do described.append(err_id) %}{% endif %}
+
+<div class="field">
+    {% if label %}
+    <label class="field__label" for="{{ name }}">
+        {{ label }}{% if required %} <span class="req" aria-hidden="true">*</span>{% endif %}
+    </label>
+    {% endif %}
+
+    <div class="field__control">
+        {# O conteúdo do bloco vem aqui #}
+        {{ caller() }}
+
+        {% if help_text %}
+        <div id="{{ hint_id }}" class="field__hint text-muted">{{ help_text }}</div>
+        {% endif %}
+        {% if error %}
+        <div id="{{ err_id }}" class="field__error" role="alert">{{ error }}</div>
+        {% endif %}
+    </div>
+</div>
+{%- endmacro %}
+
+
+{%- macro input_text(name, label=None, value=None, type='text',
+placeholder=None, required=False, disabled=False,
+autocomplete=None, help_text=None, error=None) -%}
+{% call field_wrapper(name, label, required, help_text, error) %}
+<input class="input {{ 'is-invalid' if error else '' }}" id="{{ name }}" name="{{ name }}" type="{{ type }}"
+    value="{{ value if value is not none else '' }}" {% if placeholder %}placeholder="{{ placeholder }}" {% endif %} {%
+    if required %}required{% endif %} {% if disabled %}disabled{% endif %} {% if autocomplete
+    %}autocomplete="{{ autocomplete }}" {% endif %}>
+{% endcall %}
+{%- endmacro %}
+
+
+{%- macro select(name, label=None, options=[], option_value='value', option_label='label',
+value=None, placeholder=None, required=False, disabled=False,
+help_text=None, error=None) -%}
+{% call field_wrapper(name, label, required, help_text, error) %}
+<select class="select {{ 'is-invalid' if error else '' }}" id="{{ name }}" name="{{ name }}" {% if required %}required{%
+    endif %} {% if disabled %}disabled{% endif %}>
+    {% if placeholder %}<option value="">{{ placeholder }}</option>{% endif %}
+    {% for opt in options %}
+    {% set ov = opt[option_value] if opt is mapping else attribute(opt, option_value) %}
+    {% set ol = opt[option_label] if opt is mapping else attribute(opt, option_label) %}
+    <option value="{{ ov }}" {{ 'selected' if (value|string)==(ov|string) }}>{{ ol }}</option>
+    {% endfor %}
+</select>
+{% endcall %}
+{%- endmacro %}

@@ -1,0 +1,129 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-professional page-professional-dashboard' %}
+
+{% from "components/card.html" import card %}
+{% from "components/table.html" import table %}
+{% from "components/badge.html" import status_badge %}
+{% from "_partials/modal.html" import confirm %}
+
+{% block title %}Dashboard — Profissional{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/professional.css') }}?v={{ app_version|default('1') }}">
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/professional-dashboard.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = breadcrumbs if breadcrumbs is defined else [{'label':'Início'}] %}
+{% include "_partials/breadcrumbs.html" %}
+
+<section class="pro-grid">
+    {# Próxima sessão #}
+    {% if next_session %}
+    {% set header_actions %}
+    <div class="btnbar">
+        {% if next_session.start_url %}<a class="btn btn--success" href="{{ next_session.start_url }}">Iniciar</a>{%
+        endif %}
+        {% if next_session.cancel_url %}
+        <button class="btn btn--danger" type="button" data-action="cancel"
+            data-cancel-url="{{ next_session.cancel_url }}" data-appt-id="{{ next_session.id }}">Cancelar</button>
+        {% endif %}
+        <a class="btn btn--ghost" href="/professional/schedule?view=day">Ver agenda</a>
+    </div>
+    {% endset %}
+    {% call card(title="Próxima sessão", subtitle=next_session.starts_at_human|default(next_session.starts_at_local),
+    actions_html=header_actions, variant='highlight') %}
+    <div class="next-session">
+        <div class="next-session__main">
+            <div class="next-session__who">
+                <strong>{{ next_session.client_name }}</strong>
+                <div class="text-muted">{{ next_session.service_name }}</div>
+            </div>
+            <div class="next-session__time">
+                <div>{{ next_session.starts_at_local }}</div>
+                {% if next_session.ends_at_local %}<div class="text-muted">até {{ next_session.ends_at_local }}</div>{%
+                endif %}
+            </div>
+        </div>
+        <div class="next-session__meta">
+            {% if next_session.location %}<div>📍 {{ next_session.location }}</div>{% endif %}
+            <div>{{ status_badge(next_session.status) }}</div>
+        </div>
+    </div>
+    {% endcall %}
+    {% else %}
+    {{ card(title="Sem sessão próxima", body_html='<p class="text-muted">Nada agendado para os próximos minutos.</p>
+    <div class="mt-2"><a class="btn btn--ghost" href="/professional/schedule">Abrir agenda</a></div>') }}
+    {% endif %}
+
+    {# Bloco lateral: ações rápidas #}
+    {% call card(title="Ações rápidas") %}
+    <nav class="quick-actions">
+        <a class="btn btn--block" href="/professional/schedule?view=day">Agenda do dia</a>
+        <a class="btn btn--secondary btn--block" href="/professional/schedule?view=week">Semana</a>
+        <a class="btn btn--secondary btn--block" href="/professional/schedule?only=free">Horários livres</a>
+        <a class="btn btn--secondary btn--block" href="/professional/reports">Relatórios</a>
+    </nav>
+    {% endcall %}
+</section>
+
+{# KPIs #}
+<section class="pro-kpis">
+    {{ card(title="Hoje", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.today|default(0)) ~ '</div>
+        <div class="kpi__label">sessões</div>
+    </div>') }}
+    {{ card(title="Semana", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.week|default(0)) ~ '</div>
+        <div class="kpi__label">sessões</div>
+    </div>') }}
+    {{ card(title="Comparecimentos", subtitle="Últimos 30 dias", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.attended_30d|default(0)) ~ '</div>
+        <div class="kpi__label">realizadas</div>
+    </div>') }}
+    {{ card(title="Faltas", subtitle="Últimos 30 dias", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.no_show_30d|default(0)) ~ '</div>
+        <div class="kpi__label">sem comparecimento</div>
+    </div>') }}
+</section>
+
+{# Hoje (lista) #}
+<section class="section">
+    {% set columns = [
+    {'key':'time','label':'Horário','class':'w-10rem nowrap'},
+    {'key':'client_name','label':'Cliente'},
+    {'key':'service_name','label':'Serviço'},
+    {'key':'status','label':'Status','class':'col-status nowrap'},
+    {'key':'actions','label':'','class':'col-status nowrap','align':'center'}
+    ] %}
+    {% set ns = namespace(rows=[]) %}
+    {% for s in (today_sessions or []) %}
+    {% set _status_html %}{{ status_badge(s.status) }}{% endset %}
+    {% set _actions_html %}
+    <div class="row-actions">
+        {% if s.start_url and s.status in ['scheduled','confirmado','scheduled','agendado'] %}
+        <a class="btn btn--success btn--sm" href="{{ s.start_url }}">Iniciar</a>
+        {% endif %}
+        {% if s.cancel_url and s.status not in ['canceled','cancelado'] %}
+        <button class="btn btn--danger btn--sm" type="button" data-action="cancel" data-cancel-url="{{ s.cancel_url }}"
+            data-appt-id="{{ s.id }}">Cancelar</button>
+        {% endif %}
+    </div>
+    {% endset %}
+    {% set _ = ns.rows.append({'time': s.starts_at_local, 'client_name': s.client_name, 'service_name': s.service_name,
+    'status': s.status, '_html': {'status': _status_html, 'actions': _actions_html}}) %}
+    {% endfor %}
+
+    {{ table(columns=columns, rows=ns.rows, caption="Hoje", empty_message="Nenhuma sessão hoje.") }}
+</section>
+
+{{ confirm(id="cancel-modal", title="Cancelar sessão", message="Confirmar cancelamento desta sessão?",
+confirm_label="Cancelar", cancel_label="Voltar", destructive=True) }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/pages/family-appointments.js') }}?v={{ app_version|default('1') }}"
+    defer></script>
+{% endblock %}

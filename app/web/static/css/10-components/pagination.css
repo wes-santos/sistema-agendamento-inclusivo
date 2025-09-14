@@ -1,0 +1,50 @@
+/* Paginação */
+.pager {
+  margin: 1rem 0;
+  display: flex;
+  justify-content: center;
+}
+.pager__list {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+  padding: 0;
+  list-style: none;
+}
+.pager__item {
+}
+
+.pager__link {
+  min-width: 2rem;
+  height: 2rem;
+  padding: 0 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border, #e5e7eb);
+  background: var(--surface, #fff);
+  color: var(--text, #0a0a0a);
+  text-decoration: none;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+.pager__link:hover {
+  background: var(--surface-1, #fafafa);
+}
+
+.pager__link.is-active,
+.pager__link[aria-current="page"] {
+  border-color: var(--brand, #3b82f6);
+  box-shadow: 0 0 0 3px
+    color-mix(in oklab, var(--brand, #3b82f6) 20%, transparent);
+}
+
+.pager__link--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: var(--surface-1, #fafafa);
+}
+.pager__ellipsis {
+  padding: 0 0.4rem;
+  color: var(--muted, #6b7280);
+}

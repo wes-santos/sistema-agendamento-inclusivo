@@ -1,0 +1,41 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-auth page-auth-login' %}
+
+{% from "components/card.html" import card %}
+{% from "components/form_field.html" import input_text %}
+
+{% block title %}Entrar{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/20-pages/auth.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+
+<section class="auth-wrap">
+    {% call card(title="Entrar", subtitle="Acesse sua conta") %}
+
+    {% if error %}
+    <div class="alert alert--danger" role="alert">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('auth_login_post') }}" class="auth-form">
+        <input type="hidden" name="next" value="{{ next|default('/') }}">
+
+        {{ input_text(name="email", type="email", label="E-mail", autocomplete="username", required=True,
+        value=(form.email if form and form.email else '')) }}
+
+        {{ input_text(name="password", type="password", label="Senha", autocomplete="current-password", required=True)
+        }}
+
+        <div class="auth-actions">
+            <button class="btn" type="submit">Entrar</button>
+            <a class="btn btn--ghost" href="/">Cancelar</a>
+        </div>
+    </form>
+
+    <p class="auth-note text-muted">Dica: ative o modo demo (?demo=1) para entrar sem cadastro.</p>
+    {% endcall %}
+</section>
+
+{% endblock %}

@@ -1,0 +1,76 @@
+{# Tabela acessível e reutilizável.
+Uso (dados como lista de dicts):
+{% from "components/table.html" import table %}
+{% set cols = [
+{"key":"service","label":"Serviço"},
+{"key":"starts_at","label":"Início","align":"right"},
+{"key":"status","label":"Status","class":"col-status"}
+] %}
+{{ table(columns=cols, rows=items, caption="Meus agendamentos", empty_message="Sem registros") }}
+
+Observações:
+- rows: lista de dicts; para HTML custom em uma célula, use row._html[key] (string segura).
+- align: left|center|right
+- width/class opcionais por coluna
+- add-ons JS (ordenar, seleções) podem usar data-attrs já previstos
+#}
+{% macro table(columns, rows, caption=None, empty_message="Nenhum registro.", responsive=True, striped=True, hover=True,
+compact=False) -%}
+<div class="table-wrap
+            {% if responsive %}table-wrap--responsive{% endif %}
+            {% if compact %}table-wrap--compact{% endif %}">
+    <table class="table
+                {% if striped %}table--striped{% endif %}
+                {% if hover %}table--hover{% endif %}">
+        {% if caption %}
+        <caption class="table__caption">{{ caption }}</caption>
+        {% endif %}
+        <thead class="table__head">
+            <tr>
+                {% for c in columns %}
+                {# classes de th por alinhamento/largura #}
+                {% set th_classes = [
+                'table__th',
+                'is-' ~ (c.align if c.align else 'left'),
+                c.class if c.class else ''
+                ] | reject('equalto','') | list %}
+                <th scope="col" class="{{ ' '.join(th_classes) }}" {% if c.width %}data-col-width="{{ c.width }}" {%
+                    endif %} data-col-key="{{ c.key }}">
+                    {{ c.label }}
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody class="table__body">
+            {% if rows and rows|length > 0 %}
+            {% for r in rows %}
+            <tr class="table__row" data-row-index="{{ loop.index0 }}">
+                {% for c in columns %}
+                {% set val = r.get(c.key) if r is mapping else attribute(r, c.key) %}
+                {% set cell_html = (r._html.get(c.key) if r is mapping and r.get('_html') else None) %}
+                {% set td_classes = [
+                'table__td',
+                'is-' ~ (c.align if c.align else 'left'),
+                c.class if c.class else ''
+                ] | reject('equalto','') | list %}
+                <td class="{{ ' '.join(td_classes) }}" data-col-key="{{ c.key }}">
+                    {% if cell_html is not none %}
+                    {{ cell_html | safe }}
+                    {% else %}
+                    {{ val }}
+                    {% endif %}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+            {% else %}
+            <tr class="table__row table__row--empty">
+                <td class="table__td" colspan="{{ columns|length }}">
+                    <div class="table__empty">{{ empty_message }}</div>
+                </td>
+            </tr>
+            {% endif %}
+        </tbody>
+    </table>
+</div>
+{%- endmacro %}

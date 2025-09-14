@@ -1,0 +1,42 @@
+{# Macro de Card genérico.
+Uso:
+{% from "components/card.html" import card %}
+{{ card(title="Título", subtitle="Opcional", actions_html='<a class="btn">Ação</a>') }}
+{% call card(title="Com slot") %} ...conteúdo... {% endcall %}
+
+Parâmetros:
+- title, subtitle: strings
+- actions_html: HTML para ações no header (safe)
+- footer_html: HTML para o rodapé (safe)
+- variant: default | muted | highlight | danger | info | success
+- id: opcional, id do card
+- body_html: conteúdo se não usar {% call %} slot
+#}
+{% macro card(title=None, subtitle=None, actions_html=None, footer_html=None, variant='default', id=None,
+body_html=None) -%}
+<article class="card card--{{ variant }}" {% if id %}id="{{ id }}" {% endif %}>
+    {% if title or actions_html or subtitle %}
+    <header class="card__header">
+        <div class="card__titles">
+            {% if title %}<h2 class="card__title">{{ title }}</h2>{% endif %}
+            {% if subtitle %}<p class="card__subtitle">{{ subtitle }}</p>{% endif %}
+        </div>
+        {% if actions_html %}
+        <div class="card__actions">{{ actions_html|safe }}</div>
+        {% endif %}
+    </header>
+    {% endif %}
+
+    <div class="card__body">
+        {% if caller is defined %}{{ caller() }}
+        {% elif body_html %}{{ body_html|safe }}
+        {% endif %}
+    </div>
+
+    {% if footer_html %}
+    <footer class="card__footer">
+        {{ footer_html|safe }}
+    </footer>
+    {% endif %}
+</article>
+{%- endmacro %}
