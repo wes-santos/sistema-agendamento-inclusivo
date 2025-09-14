@@ -46,7 +46,6 @@ def timeslots(start_h=8, end_h=18) -> list[str]:
 def build_nav_urls_range(
     base_path: str,
     *,
-    view: str,
     date_from: date,
     date_to: date | None,
     persist: dict | None = None,
@@ -54,13 +53,13 @@ def build_nav_urls_range(
     persist = {k: v for (k, v) in (persist or {}).items() if v not in (None, "")}
 
     def _url(df: date, dt: date | None) -> str:
-        params = {"view": view, **persist}
+        params = {**persist}
         params["date_from"] = df.isoformat()
         if dt:
             params["date_to"] = dt.isoformat()
         return f"{base_path}?{urlencode(params)}"
 
-    step = 1 if view == "day" else 7
+    step = 7
     prev_df = date_from - timedelta(days=step)
     prev_dt = (date_to - timedelta(days=step)) if date_to else None
     next_df = date_from + timedelta(days=step)
@@ -68,11 +67,8 @@ def build_nav_urls_range(
 
     # today
     t = date.today()
-    if view == "day":
-        today_df, today_dt = t, None
-    else:
-        ws = start_of_week(t)
-        today_df, today_dt = ws, ws + timedelta(days=6)
+    ws = start_of_week(t)
+    today_df, today_dt = ws, ws + timedelta(days=6)
 
     return {
         "prev_url": _url(prev_df, prev_dt),
@@ -435,7 +431,7 @@ def _render_professional_schedule(
     demo: bool,
 ) -> HTMLResponse:
     # filtros
-    view = filters.get("view") or "week"
+    view = "week"
     # parse date range
     df_str = (filters.get("date_from") or "").strip()
     dt_str = (filters.get("date_to") or "").strip()
@@ -445,18 +441,12 @@ def _render_professional_schedule(
         except Exception:
             return fallback
     today_d = date.today()
-    if view == "day":
-        base_date = _parse_date(df_str, today_d)
-        range_from = base_date
-        range_to: date | None = None
+    if df_str and dt_str:
+        range_from = _parse_date(df_str, today_d)
+        range_to = _parse_date(dt_str, range_from + timedelta(days=6))
     else:
-        # week
-        if df_str and dt_str:
-            range_from = _parse_date(df_str, today_d)
-            range_to = _parse_date(dt_str, range_from + timedelta(days=6))
-        else:
-            ws = start_of_week(today_d)
-            range_from, range_to = ws, ws + timedelta(days=6)
+        ws = start_of_week(today_d)
+        range_from, range_to = ws, ws + timedelta(days=6)
 
     # Services list (fallback static; replaced with DB values below if available)
     services = [
@@ -465,30 +455,20 @@ def _render_professional_schedule(
         {"id": "neuro", "name": "Neuropsicologia"},
     ]
 
-    if view == "day":
-        nav = build_nav_urls_range(
-            "/professional/schedule",
-            view=view,
-            date_from=base_date,
-            date_to=None,
-            persist=filters,
-        )
-    else:
-        nav = build_nav_urls_range(
-            "/professional/schedule",
-            view=view,
-            date_from=range_from,
-            date_to=range_to,
-            persist=filters,
-        )
+    nav = build_nav_urls_range(
+        "/professional/schedule",
+        date_from=range_from,
+        date_to=range_to,
+        persist=filters,
+    )
 
     context = {
         "request": request,
         "current_user": current_user,
         "app_version": getattr(settings, "APP_VERSION", "dev"),
         "filters": {
-            "date_from": (range_from if view == "week" else base_date).isoformat(),
-            "date_to": (range_to.isoformat() if (view == "week" and range_to) else ""),
+            "date_from": range_from.isoformat(),
+            "date_to": (range_to.isoformat() if range_to else ""),
             "view": view,
             "service_id": filters.get("service_id", ""),
         },
@@ -530,16 +510,12 @@ def _render_professional_schedule(
             except Exception:
                 services = []
             # window
-            if view == "day":
-                start_local = datetime.combine(base_date, time.min, tzinfo=tz)
-                end_local = datetime.combine(base_date, time.max, tzinfo=tz)
+            ws = range_from
+            start_local = datetime.combine(ws, time.min, tzinfo=tz)
+            if range_to:
+                end_local = datetime.combine(range_to, time.max, tzinfo=tz)
             else:
-                ws = range_from
-                start_local = datetime.combine(ws, time.min, tzinfo=tz)
-                if range_to:
-                    end_local = datetime.combine(range_to, time.max, tzinfo=tz)
-                else:
-                    end_local = start_local + timedelta(days=7) - timedelta(microseconds=1)
+                end_local = start_local + timedelta(days=7) - timedelta(microseconds=1)
 
             start_utc = start_local.astimezone(UTC)
             end_utc = end_local.astimezone(UTC)
@@ -562,64 +538,40 @@ def _render_professional_schedule(
             def _label_hm(dt: datetime) -> str:
                 return dt.astimezone(tz).strftime("%H:%M")
 
-            if view == "day":
-                rows = []
-                # slots hourly
-                for h in range(8, 18):
-                    slot_label = f"{h:02d}:00"
-                    # appointments starting within this hour
+            # week grid
+            week = {"days": [], "rows": []}
+            ws = range_from
+            week["days"] = [
+                {"label": f"{PT_WEEKDAYS_SHORT[i]} # {fmt_dmy(ws + timedelta(days=i))}"}
+                for i in range(7)
+            ]
+            # map appointments by (day_index, hour)
+            ap_map: dict[tuple[int, int], list[Appointment]] = {}
+            for ap in appts:
+                lt = ap.starts_at.astimezone(tz)
+                day_idx = (lt.date() - ws).days
+                if 0 <= day_idx <= 6:
+                    ap_map.setdefault((day_idx, lt.hour), []).append(ap)
+            for h in range(8, 18):
+                cells = []
+                for day_idx in range(7):
                     items = []
-                    for ap in appts:
-                        lt = ap.starts_at.astimezone(tz)
-                        if lt.hour == h:
-                            items.append(
-                                {
-                                    "client_name": "Aluno",
-                                    "service_name": ap.service,
-                                    "starts_at_local": _label_hm(ap.starts_at),
-                                    "ends_at_local": _label_hm(ap.ends_at),
-                                }
-                            )
+                    for ap in ap_map.get((day_idx, h), []):
+                        items.append(
+                            {
+                                "client_name": "Aluno",
+                                "service_name": ap.service,
+                                "starts_at_local": _label_hm(ap.starts_at),
+                                "ends_at_local": _label_hm(ap.ends_at),
+                            }
+                        )
                     state = "is-busy" if items else "is-free"
-                    rows.append({"label": slot_label, "slot": {"state": state, "items": items}})
-                context["day_rows"] = rows
-            else:
-                # week grid
-                week = {"days": [], "rows": []}
-                ws = range_from
-                week["days"] = [
-                    {"label": f"{PT_WEEKDAYS_SHORT[i]} # {fmt_dmy(ws + timedelta(days=i))}"}
-                    for i in range(7)
-                ]
-                # map appointments by (day_index, hour)
-                ap_map: dict[tuple[int, int], list[Appointment]] = {}
-                for ap in appts:
-                    lt = ap.starts_at.astimezone(tz)
-                    day_idx = (lt.date() - ws).days
-                    if 0 <= day_idx <= 6:
-                        ap_map.setdefault((day_idx, lt.hour), []).append(ap)
-                for h in range(8, 18):
-                    cells = []
-                    for day_idx in range(7):
-                        items = []
-                        for ap in ap_map.get((day_idx, h), []):
-                            items.append(
-                                {
-                                    "client_name": "Aluno",
-                                    "service_name": ap.service,
-                                    "starts_at_local": _label_hm(ap.starts_at),
-                                    "ends_at_local": _label_hm(ap.ends_at),
-                                }
-                            )
-                        state = "is-busy" if items else "is-free"
-                        cells.append({"state": state, "items": items})
-                    week["rows"].append({"label": f"{h:02d}:00", "cells": cells})
-                context["week"] = week
+                    cells.append({"state": state, "items": items})
+                week["rows"].append({"label": f"{h:02d}:00", "cells": cells})
+            context["week"] = week
 
     # Fallback demo rendering if no real data was constructed
-    if view == "day" and context["day_rows"] is None:
-        context["day_rows"] = _day_payload(base_date, demo)
-    if view != "day" and context["week"] is None:
+    if context["week"] is None:
         # build demo week using range_from
         context["week"] = _week_payload(range_from, demo)
 
@@ -633,11 +585,10 @@ def ui_professional_schedule(
     db: Session = Depends(get_db),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
-    view: str = Query("week", pattern="^(day|week)$"),
     service_id: str | None = Query(None),
     demo: bool = Query(False),
 ):
-    filters = {"date_from": date_from, "date_to": date_to, "view": view, "service_id": service_id}
+    filters = {"date_from": date_from, "date_to": date_to, "service_id": service_id}
     return _render_professional_schedule(request, current_user, db, filters, demo)
 
 
@@ -646,11 +597,10 @@ def ui_professional_schedule(
 def preview_professional_schedule(
     request: Request,
     date_str: str | None = Query(None, alias="date"),
-    view: str = Query("week", pattern="^(day|week)$"),
     service_id: str | None = Query(None),
     demo: bool = Query(True),
 ):
-    filters = {"date": date_str, "view": view, "service_id": service_id}
+    filters = {"date": date_str, "service_id": service_id}
     return _render_professional_schedule(request, None, None, filters, demo)
 
 

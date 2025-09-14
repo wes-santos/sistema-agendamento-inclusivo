@@ -1,14 +1,7 @@
 // Navegação da agenda (prev/next/hoje) e submissão reativa do "view"
 (() => {
   const d = document;
-  const viewSel = d.getElementById("view");
-  if (viewSel) {
-    viewSel.addEventListener("change", () => {
-      // submete o form para alternar entre dia/semana
-      const form = d.querySelector("form.sched-controls__form");
-      if (form) form.submit();
-    });
-  }
+  
 
   const applyBtn = d.querySelector("button[type='submit']");
   if(applyBtn) {
