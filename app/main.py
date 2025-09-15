@@ -24,6 +24,7 @@ from app.api.routes.dashboard_professional import (
     router as dashboard_professional_router,
 )
 from app.api.routes.professionals import router as professionals_router
+from app.api.routes.auth import router as api_auth_router
 from app.api.routes.public_appointments import router as public_appt_router
 from app.api.routes.slots import router as slots_router
 from app.api.routes.students import router as students_router
@@ -135,6 +136,7 @@ app.include_router(ui_router)
 app.include_router(slots_router)
 app.include_router(appt_wizard_router)
 app.include_router(professionals_router)
+app.include_router(api_auth_router)
 app.include_router(students_router)
 app.include_router(availability_router)
 app.include_router(public_appt_router)

@@ -28,8 +28,21 @@ def _tomorrow_local_window_utc(now_local: datetime) -> tuple[datetime, datetime]
     return start_local.astimezone(UTC), end_local.astimezone(UTC)
 
 
+def _normalize_base(url: str | None) -> str:
+    if not url:
+        return "http://localhost:8000"
+    url = url.strip()
+    if not url:
+        return "http://localhost:8000"
+    if not (url.startswith("http://") or url.startswith("https://")):
+        url = "http://" + url
+    return url.rstrip("/")
+
+
 def _public_url(path: str) -> str:
-    base = settings.APP_PUBLIC_BASE_URL.rstrip("/")
+    base = _normalize_base(getattr(settings, "APP_PUBLIC_BASE_URL", None))
+    if not path.startswith("/"):
+        path = "/" + path
     return f"{base}{path}"
 
 
@@ -86,7 +99,8 @@ def main() -> None:
         )
 
         for ap in appts:
-            guardian = getattr(ap.student, "guardian_user", None)
+            # Student has relationship 'guardian' (User); not 'guardian_user'
+            guardian = getattr(ap.student, "guardian", None)
             recipient = getattr(guardian, "email", None) or getattr(
                 settings, "FALLBACK_REMINDER_EMAIL", None
             )
@@ -118,7 +132,8 @@ def main() -> None:
                 "confirm_url": confirm_url,
                 "cancel_url": cancel_url,
             }
-            html = render("reminder.html").render(ctx)
+            # Template name is 'appointment_reminder.html'
+            html = render("appointment_reminder.html").render(ctx)
             subject = f"[SAI] Lembrete — amanhã {starts_local_fmt} ({ap.service})"
 
             from app.services.mailer import send_email
