@@ -1,0 +1,30 @@
+/* Controles sticky da agenda */
+.page-professional.page-professional-schedule .sched-controls {
+  position: sticky;
+  top: calc(var(--nav-height, 56px) + 0.5rem);
+  z-index: 20;
+  background: var(--page);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.page-professional.page-professional-schedule .sched-controls__form {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 0.5rem;
+}
+
+/* Itens dentro das células/slots */
+.page-professional .slot__col {
+  display: grid;
+  gap: 0.4rem;
+  width: 100%;
+}
+.page-professional .slot__item {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--surface-1);
+}

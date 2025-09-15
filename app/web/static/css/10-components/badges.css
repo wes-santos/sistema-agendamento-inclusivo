@@ -1,0 +1,59 @@
+/* Badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  font: 600 0.8rem/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.badge__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+  display: inline-block;
+}
+
+/* Tamanhos */
+.badge--md {
+  padding: 0.22rem 0.55rem;
+}
+.badge--lg {
+  padding: 0.35rem 0.7rem;
+  font-size: 0.9rem;
+}
+
+/* Variantes */
+.badge--neutral {
+  background: var(--surface-1, #f3f4f6);
+  color: var(--text, #111827);
+  border-color: var(--border, #e5e7eb);
+}
+.badge--info {
+  background: color-mix(in oklab, var(--info, #0ea5e9) 15%, #fff);
+  color: var(--info, #0ea5e9);
+  border-color: color-mix(in oklab, var(--info, #0ea5e9) 40%, #fff);
+}
+.badge--success {
+  background: color-mix(in oklab, var(--success, #16a34a) 15%, #fff);
+  color: var(--success, #16a34a);
+  border-color: color-mix(in oklab, var(--success, #16a34a) 40%, #fff);
+}
+.badge--warning {
+  background: color-mix(in oklab, var(--warning, #f59e0b) 20%, #fff);
+  color: #8a4b00;
+  border-color: color-mix(in oklab, var(--warning, #f59e0b) 45%, #fff);
+}
+.badge--danger {
+  background: color-mix(in oklab, var(--danger, #ef4444) 15%, #fff);
+  color: var(--danger, #ef4444);
+  border-color: color-mix(in oklab, var(--danger, #ef4444) 40%, #fff);
+}
+.badge--outline {
+  background: transparent;
+  color: var(--text, #111827);
+  border-color: var(--border, #e5e7eb);
+}

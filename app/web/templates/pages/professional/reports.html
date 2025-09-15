@@ -1,0 +1,50 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-professional page-professional-reports' %}
+
+{% from "components/card.html" import card %}
+{% from "components/table.html" import table %}
+{% from "components/form_field.html" import input_text, select %}
+
+{% block title %}Relatórios — Profissional{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{'label':'Profissional','href':'/professional/dashboard'},{'label':'Relatórios'}] %}
+{% include "_partials/breadcrumbs.html" %}
+
+<section class="reports-filters">
+  <form method="get" action="/professional/reports" class="hstack gap-2" role="search">
+    {{ input_text(name="date_from", type="date", label="De", value=(filters.date_from if filters is defined else '')) }}
+    {{ input_text(name="date_to", type="date", label="Até", value=(filters.date_to if filters is defined else '')) }}
+    {{ select(name="group_by", label="Agrupar por",
+      options=[{'value':'day','label':'Dia'},{'value':'service','label':'Serviço'}],
+      value=(filters.group_by if filters is defined else 'day')
+    ) }}
+    <div class="field">
+      <label class="field__label">&nbsp;</label>
+      <div class="field__control">
+        <button class="btn" type="submit">Aplicar</button>
+      </div>
+    </div>
+  </form>
+</section>
+
+<section class="kpi-grid section--tight">
+  {{ card(title="Total no período", body_html='<div class="kpi">\n        <div class="kpi__value">' ~ (kpis.total|default(0)) ~ '</div>\n        <div class="kpi__label">agendamentos</div>\n    </div>') }}
+  {{ card(title="Confirmados", body_html='<div class="kpi">\n        <div class="kpi__value">' ~ (kpis.confirmed|default(0)) ~ '</div>\n        <div class="kpi__label">sessões</div>\n    </div>') }}
+  {{ card(title="Cancelados", body_html='<div class="kpi">\n        <div class="kpi__value">' ~ (kpis.canceled|default(0)) ~ '</div>\n        <div class="kpi__label">sessões</div>\n    </div>') }}
+  {{ card(title="Realizados", body_html='<div class="kpi">\n        <div class="kpi__value">' ~ (kpis.attended|default(0)) ~ '</div>\n        <div class="kpi__label">sessões</div>\n    </div>') }}
+</section>
+
+{% set label_col = (filters.group_by == 'day' and 'Data') or 'Serviço' %}
+{% set columns = [
+  {'key':'label','label': label_col, 'class':'w-14rem'},
+  {'key':'scheduled','label':'Agendados','align':'right','class':'w-8rem'},
+  {'key':'confirmed','label':'Confirmados','align':'right','class':'w-8rem'},
+  {'key':'attended','label':'Realizados','align':'right','class':'w-8rem'},
+  {'key':'canceled','label':'Cancelados','align':'right','class':'w-8rem'}
+] %}
+
+{{ table(columns=columns, rows=rows|default([]), caption="Relatório", empty_message="Sem dados no período.", compact=True, responsive=True, striped=True, hover=True) }}
+
+{% endblock %}
+

@@ -20,8 +20,23 @@ from app.utils.tz import to_local
 BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 
+def _normalize_base(url: str | None) -> str:
+    if not url:
+        return "http://localhost:8000"
+    url = url.strip()
+    if not url:
+        return "http://localhost:8000"
+    if not (url.startswith("http://") or url.startswith("https://")):
+        # treat as host[:port] without scheme
+        url = "http://" + url
+    return url.rstrip("/")
+
+
 def _make_link(path: str) -> str:
-    base = settings.APP_PUBLIC_BASE_URL.rstrip("/")
+    # Always build absolute, well-formed links for emails
+    base = _normalize_base(getattr(settings, "APP_PUBLIC_BASE_URL", None))
+    if not path.startswith("/"):
+        path = "/" + path
     return f"{base}{path}"
 
 

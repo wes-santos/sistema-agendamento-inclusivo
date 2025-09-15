@@ -1,0 +1,137 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-professional page-professional-schedule' %}
+
+{% from "components/card.html" import card %}
+{% from "_partials/modal.html" import confirm %}
+
+{% block title %}Agenda — Profissional{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/professional.css') }}?v={{ app_version|default('1') }}">
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/professional-schedule.css') }}?v={{ app_version|default('1') }}">
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/filters.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = breadcrumbs if breadcrumbs is defined else
+[{'label':'Profissional','href':'/professional/dashboard'},{'label':'Agenda'}] %}
+{% include "_partials/breadcrumbs.html" %}
+
+{# Controles (sticky) #}
+<section class="sched-controls">
+    <form method="get" class="sched-controls__form">
+        <div class="filters-grid">
+            <div class="field">
+                <label class="field__label" for="date_from">De</label>
+                <div class="field__control">
+                    <input id="date_from" name="date_from" type="date" class="input" value="{{ filters.date_from|default('') }}">
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="field__label" for="date_to">Até</label>
+                <div class="field__control">
+                    <input id="date_to" name="date_to" type="date" class="input" value="{{ filters.date_to|default('') }}">
+                </div>
+            </div>
+
+            
+
+            <div class="field">
+                <label class="field__label" for="service">Serviço</label>
+                <div class="field__control">
+                    <select id="service" name="service_id" class="select">
+                        <option value="">Todos</option>
+                        {% for sv in services or [] %}
+                        <option value="{{ sv.id }}" {{ 'selected' if (filters.service_id|string)==(sv.id|string) }}>{{
+                            sv.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+        </div>
+
+            <div class="field" style="margin-top:.5rem;">
+            <div class="field__control btnbar">
+                <a class="btn btn--nav" data-nav="prev" href="{{ nav.prev_url }}" title="Semana anterior" aria-label="Semana anterior">‹</a>
+                <a class="btn btn--ghost btn--nav" data-nav="today" href="{{ nav.today_url }}" title="Ir para hoje" aria-label="Ir para hoje">●</a>
+                <a class="btn btn--nav" data-nav="next" href="{{ nav.next_url }}" title="Próxima semana" aria-label="Próxima semana">›</a>
+                <button class="btn" type="submit" title="Aplicar filtros">Aplicar</button>
+            </div>
+            </div>
+    </form>
+</section>
+
+{# Grade da agenda #}
+{% call card(title="Agenda " ~ (filters.view|default('week')|capitalize) ) %}
+{% if filters.view == 'day' %}
+<div class="schedule schedule--day">
+    <div class="schedule__th schedule__th--time">Horário</div>
+    <div class="schedule__th">Sessões</div>
+
+    {% for row in day_rows or [] %}
+    <div class="schedule__time">{{ row.label }}</div>
+    <div class="slot {{ row.slot.state }}">
+        {% if row.slot.items %}
+        <div class="slot__col">
+            {% for it in row.slot.items %}
+            <div class="slot__item">
+                <div class="slot__title">{{ it.client_name }}</div>
+                <div class="slot__meta text-muted">{{ it.service_name }} — {{ it.starts_at_local }}{% if
+                    it.ends_at_local %}–{{ it.ends_at_local }}{% endif %}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="slot__meta text-muted">Livre</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="schedule schedule--week">
+    <div class="schedule__th schedule__th--time">Horário</div>
+    {% for d in week.days %}
+    <div class="schedule__th">
+        <span>{{ d.label.split("#")[0] }}</span>
+        <br />
+        <span>{{ d.label.split("#")[1] }}</span>
+    </div>
+    {% endfor %}
+
+    {% for row in week.rows %}
+    <div class="schedule__time">{{ row.label }}</div>
+    {% for cell in row.cells %}
+    <div class="slot {{ cell.state }}">
+        {% if cell['items'] %}
+        <div class="slot__col">
+            {% for it in cell['items'] %}
+            <div class="slot__item">
+                <div class="slot__title">{{ it.client_name }}</div>
+                <div class="slot__meta text-muted">{{ it.service_name }} — {{ it.starts_at_local }}{% if
+                    it.ends_at_local %}–{{ it.ends_at_local }}{% endif %}</div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="slot__meta text-muted">Livre</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endfor %}
+</div>
+{% endif %}
+{% endcall %}
+
+{{ confirm(id="cancel-modal", title="Cancelar sessão", message="Confirmar cancelamento desta sessão?",
+confirm_label="Cancelar", cancel_label="Voltar", destructive=True) }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/pages/professional-schedule.js') }}?v={{ app_version|default('1') }}"
+    defer></script>
+{% endblock %}

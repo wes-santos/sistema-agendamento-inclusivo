@@ -1,0 +1,31 @@
+{# Badge (etiqueta de estado).
+Uso:
+{% from "components/badge.html" import badge, status_badge %}
+{{ badge("Confirmado", "success") }}
+{{ status_badge(status) }}
+
+Variants: neutral | info | success | warning | danger | outline
+status_badge: mapeia estados de agendamento → variant + label
+#}
+{% macro badge(text, variant='neutral', title=None, dot=False, size='md') -%}
+<span class="badge badge--{{ variant }} badge--{{ size }}" {% if title %}title="{{ title }}" {% endif %}>
+    {% if dot %}<i class="badge__dot" aria-hidden="true"></i>{% endif %}
+    <span class="badge__text">{{ text }}</span>
+</span>
+{%- endmacro %}
+
+{% macro status_badge(status) -%}
+{# Normaliza #}
+{% set s = (status|string).lower() %}
+{% if s in ['scheduled','agendado','pending','pendente'] %}
+{{ badge("Agendado", "info", dot=True) }}
+{% elif s in ['confirmed','confirmado'] %}
+{{ badge("Confirmado", "success", dot=True) }}
+{% elif s in ['canceled','cancelado','cancelled'] %}
+{{ badge("Cancelado", "danger", dot=True) }}
+{% elif s in ['past','encerrado','finalizado'] %}
+{{ badge("Encerrado", "neutral") }}
+{% else %}
+{{ badge(status, "outline") }}
+{% endif %}
+{%- endmacro %}

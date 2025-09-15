@@ -54,7 +54,7 @@ def get_slots(
     by_weekday: dict[int, list[tuple]] = {}
     for a in avails:
         by_weekday.setdefault(a.weekday, []).append(
-            (a.start_utc, a.end_utc)
+            (a.starts_utc, a.ends_utc)
         )  # times (UTC) daquele weekday
 
     # Appointments que colidem com a janela (exceto CANCELLED)
@@ -70,7 +70,7 @@ def get_slots(
         )
         .all()
     )
-    busy = [(ap.starts_at_utc, ap.ends_at_utc) for ap in appts]
+    busy = [(ap.starts_at, ap.ends_at) for ap in appts]
 
     # Geração de slots (em UTC), step = slot_minutes
     step = timedelta(minutes=slot_minutes)
@@ -146,7 +146,7 @@ def get_slots_local(
     by_weekday: dict[int, list[tuple]] = {}
     for a in avails:
         by_weekday.setdefault(a.weekday, []).append(
-            (a.start_utc, a.end_utc)
+            (a.starts_utc, a.ends_utc)
         )  # time/time em UTC
 
     # compromissos que colidem com a janela (exceto CANCELLED)
@@ -162,7 +162,7 @@ def get_slots_local(
         )
         .all()
     )
-    busy = [(ap.starts_at_utc, ap.ends_at_utc) for ap in appts]
+    busy = [(ap.starts_at, ap.ends_at) for ap in appts]
 
     def overlaps(a0: datetime, a1: datetime, b0: datetime, b1: datetime) -> bool:
         # intervalo [start, end) — fim exclusivo

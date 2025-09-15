@@ -1,9 +1,23 @@
-{# expects: toast = {"type": "ok|warn|error|info", "message": "..."} #}
-{% if toast and toast.message %}
-  <div class="toast {{ toast.type or '' }}" role="status" aria-live="polite">
-    <div style="display:flex;justify-content:space-between;gap:.75rem;align-items:start">
-      <div>{{ toast.message }}</div>
-      <button class="btn" data-dialog-close aria-label="Fechar">✕</button>
-    </div>
-  </div>
-{% endif %}
+{# Opcional: "toasts" = lista inicial de {type, message, timeout?}
+type ∈ {success, info, warning, error} → classes: .toast--{type}
+JS (toast.js) manipula [data-toast-list] e <template> #}
+
+  <section class="toast-region" role="region" aria-label="Notificações">
+    <ol class="toast-list" data-toast-list aria-live="polite" aria-relevant="additions">
+      {% if toasts is defined and toasts %}
+      {% for t in toasts %}
+      <li class="toast toast--{{ t.type|default('info') }}" data-toast>
+        <div class="toast__body">{{ t.message }}</div>
+        <button type="button" class="toast__close" data-toast-close aria-label="Fechar">×</button>
+      </li>
+      {% endfor %}
+      {% endif %}
+    </ol>
+
+    <template id="toast-template">
+      <li class="toast" data-toast>
+        <div class="toast__body"></div>
+        <button type="button" class="toast__close" data-toast-close aria-label="Fechar">×</button>
+      </li>
+    </template>
+  </section>

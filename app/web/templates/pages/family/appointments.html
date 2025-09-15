@@ -1,0 +1,156 @@
+{# web/templates/pages/family/appointments.html #}
+{% extends "_base/base.html" %}
+{% set body_class = 'page-family page-family-appointments' %}
+
+{% from "components/card.html" import card %}
+{% from "components/table.html" import table %}
+{% from "components/badge.html" import status_badge %}
+{% from "components/form_field.html" import input_text, select %}
+{% from "_partials/modal.html" import confirm %}
+
+{% block title %}Meus agendamentos — Família{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/20-pages/family.css') }}?v={{ app_version|default('1') }}">
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/family-appointments.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block actions %}
+{# Espaço para botões de topo (ex.: “Agendar novo” quando existir o fluxo público) #}
+{# <div class="section--tight">
+    <a class="btn" href="/public/appointments/start">Novo agendamento</a>
+</div> #}
+{% endblock %}
+
+{% block content %}
+
+{# Breadcrumbs sugestivos (passe via rota se preferir) #}
+{% set breadcrumbs = breadcrumbs if breadcrumbs is defined else [
+{'label': 'Início', 'href': '/family/dashboard'},
+{'label': 'Meus agendamentos'}
+] %}
+{% include "_partials/breadcrumbs.html" %}
+
+{# FILTROS (GET) #}
+<div class="filters-sticky">
+    <form class="filters-bar" method="get" action="/family/appointments">
+        <div class="filters-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;align-items:end;">
+            {{ select(
+                name="service_id",
+                label="Serviço",
+                options=services,
+                option_value="id",
+                option_label="name",
+                value=(filters.service_id if filters is defined else ''),
+                placeholder="Todos"
+            ) }}
+
+            {{ select(
+                name="status",
+                label="Status",
+                options=[{'value':'scheduled','label':'Agendado'},{'value':'confirmed','label':'Confirmado'},{'value':'canceled','label':'Cancelado'},{'value':'past','label':'Encerrado'}],
+                value=(filters.status if filters is defined else ''),
+                placeholder="Todos"
+            ) }}
+
+            {{ input_text(
+                name="date_from",
+                type="date",
+                label="De",
+                value=(filters.date_from if filters is defined else '')
+            ) }}
+
+            {{ input_text(
+                name="date_to",
+                type="date",
+                label="Até",
+                value=(filters.date_to if filters is defined else '')
+            ) }}
+        </div>
+
+        <div class="field" style="margin-top:0.5rem;">
+            <label class="field__label">&nbsp;</label>
+            <div class="field__control hstack gap-2" style="justify-content:flex-end;">
+                <button class="btn" type="submit">Aplicar filtros</button>
+                <a class="btn btn--ghost" href="/family/appointments">Limpar</a>
+            </div>
+        </div>
+    </form>
+    </div>
+
+{# PREPARO DAS COLUNAS #}
+{% set columns = [
+{'key':'service_name','label':'Serviço'},
+{'key':'professional_name','label':'Profissional'},
+{'key':'starts_at_local','label':'Início','align':'right','class':'w-10rem nowrap'},
+{'key':'ends_at_local','label':'Fim','align':'right','class':'w-10rem nowrap'},
+{'key':'status','label':'Status','class':'col-status nowrap'},
+{'key':'actions','label':'','align':'center','class':'col-status nowrap'}
+] %}
+
+{# TRANSFORMA AS LINHAS PARA INJETAR HTML EM STATUS/ACTIONS (usando namespace) #}
+{% set ns = namespace(rows=[]) %}
+{% for a in (appointments or []) %}
+{# HTML do status (badge) #}
+{% set _status_html %}{{ status_badge(a.status) }}{% endset %}
+
+{# HTML das ações (confirmar/cancelar quando aplicável) #}
+{% set _actions_html %}
+<div class="row-actions">
+    <a class="btn btn--ghost btn--sm" href="/family/appointments/{{ a.id }}">Detalhes</a>
+    {% if a.confirm_url %}
+    <a class="btn btn--success btn--sm" href="{{ a.confirm_url }}">Confirmar</a>
+    {% endif %}
+    {% if a.cancel_url %}
+    <button type="button" class="btn btn--danger btn--sm" data-action="cancel" data-cancel-url="{{ a.cancel_url }}"
+        data-appt-id="{{ a.id }}">
+        Cancelar
+    </button>
+    {% endif %}
+</div>
+{% endset %}
+
+{% set _ = ns.rows.append({
+'id': a.id,
+'service_name': a.service_name,
+'professional_name': a.professional_name,
+'starts_at_local': a.starts_at_local,
+'ends_at_local': a.ends_at_local,
+'status': a.status,
+'_html': {
+'status': _status_html,
+'actions': _actions_html
+}
+}) %}
+{% endfor %}
+
+{# TABELA #}
+{{ table(
+columns=columns,
+rows=ns.rows,
+caption="Meus agendamentos",
+empty_message="Você ainda não possui agendamentos."
+) }}
+
+{# PAGINAÇÃO #}
+{% if pagination is defined %}
+{% include "_partials/pagination.html" %}
+{% endif %}
+
+{# MODAL CONFIRMAR CANCELAMENTO (único; JS injeta o destino) #}
+{{ confirm(
+id="cancel-modal",
+title="Cancelar agendamento",
+message="Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita.",
+confirm_label="Cancelar",
+cancel_label="Voltar",
+destructive=True
+) }}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/pages/family-appointments.js') }}?v={{ app_version|default('1') }}"
+    defer></script>
+{% endblock %}

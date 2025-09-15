@@ -4,6 +4,7 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -16,6 +17,22 @@ router = APIRouter(prefix="/public/appointments", tags=["public"])
 def _consume(db: Session, token: AppointmentToken):
     token.consumed_at = datetime.now(UTC)
     db.add(token)
+
+
+def _ok_page(title: str, message: str) -> HTMLResponse:
+    html = f"""
+    <!doctype html>
+    <meta charset='utf-8'>
+    <title>{title}</title>
+    <body style='font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;line-height:1.5;padding:2rem'>
+      <h2 style='margin:0 0 12px'>{title}</h2>
+      <p style='margin:0 0 12px'>{message}</p>
+      <p style='margin-top:16px'>
+        <a href='/family/dashboard' style='display:inline-block;padding:.6rem .9rem;border:1px solid #ccc;border-radius:8px;text-decoration:none'>Voltar ao painel</a>
+      </p>
+    </body>
+    """
+    return HTMLResponse(html)
 
 
 @router.get("/confirm/{token}")
@@ -35,7 +52,7 @@ def confirm_appointment(token: uuid.UUID, db: Session = Depends(get_db)):
     ap.status = AppointmentStatus.CONFIRMED
     _consume(db, t)
     db.commit()
-    return {"ok": True, "message": "Agendamento confirmado."}
+    return _ok_page("Presença confirmada", "Seu agendamento foi confirmado com sucesso.")
 
 
 @router.get("/cancel/{token}")
@@ -55,4 +72,4 @@ def cancel_appointment(token: uuid.UUID, db: Session = Depends(get_db)):
     ap.status = AppointmentStatus.CANCELLED
     _consume(db, t)
     db.commit()
-    return {"ok": True, "message": "Agendamento cancelado."}
+    return _ok_page("Agendamento cancelado", "Seu agendamento foi cancelado.")

@@ -1,0 +1,44 @@
+{# Biblioteca de macros para modais baseados em <dialog>.
+    Importação (em uma página):
+    {% from "_partials/modal.html" import modal, confirm %}
+    Abertura via JS: document.getElementById('meu-modal').showModal()
+
+    Classes esperadas em 10-components (dialog/overlay/buttons). #}
+
+    {% macro modal(id, title='', body='', ok_label='OK', show_close=True, variant='default') -%}
+    <dialog id="{{ id }}" class="modal modal--{{ variant }}" data-modal>
+        <form method="dialog" class="modal__box" data-modal-box>
+            <header class="modal__header">
+                <h2 class="modal__title">{{ title }}</h2>
+                {% if show_close %}
+                <button type="submit" class="modal__close" aria-label="Fechar">×</button>
+                {% endif %}
+            </header>
+            <section class="modal__body">
+                {{ body | safe }}
+            </section>
+            <footer class="modal__footer">
+                <button type="submit" class="btn">{{ ok_label }}</button>
+            </footer>
+        </form>
+    </dialog>
+    {%- endmacro %}
+
+    {% macro confirm(id, title, message, confirm_label='Confirmar', cancel_label='Cancelar', destructive=False) -%}
+    <dialog id="{{ id }}" class="modal modal--confirm" data-modal>
+        <form method="dialog" class="modal__box" data-modal-box>
+            <header class="modal__header">
+                <h2 class="modal__title">{{ title }}</h2>
+                <button type="submit" class="modal__close" aria-label="Fechar">×</button>
+            </header>
+            <section class="modal__body">
+                <p>{{ message }}</p>
+            </section>
+            <footer class="modal__footer">
+                <button value="cancel" class="btn btn--ghost">{{ cancel_label }}</button>
+                <button value="confirm" class="btn {{ 'btn--danger' if destructive else '' }}">{{ confirm_label
+                    }}</button>
+            </footer>
+        </form>
+    </dialog>
+    {%- endmacro %}

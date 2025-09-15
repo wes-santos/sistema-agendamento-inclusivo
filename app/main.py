@@ -9,14 +9,12 @@ from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 from starlette.middleware.httpsredirect import HTTPSRedirectMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse
 
 import app.db.base
 from app.api.routes.appointments_wizard import router as appt_wizard_router
-from app.api.routes.auth import router as auth_router
 from app.api.routes.availability import router as availability_router
 from app.api.routes.dashboard_coordination import (
     router as dashboard_coordination_router,
@@ -26,6 +24,7 @@ from app.api.routes.dashboard_professional import (
     router as dashboard_professional_router,
 )
 from app.api.routes.professionals import router as professionals_router
+from app.api.routes.auth import router as api_auth_router
 from app.api.routes.public_appointments import router as public_appt_router
 from app.api.routes.slots import router as slots_router
 from app.api.routes.students import router as students_router
@@ -36,16 +35,19 @@ from app.deps import get_current_user
 from app.middlewares.telemetry import RequestContextMiddleware
 from app.models.user import Role, User
 from app.version import APP_VERSION, BUILD_TIME_UTC, GIT_SHA
+from app.web.routes import auth, coordination, family, professional
 from app.web.routes.ui import router as ui_router
+from app.web.templating import templates
 
 configure_logging(json=True, level="INFO")
 
 app = FastAPI(debug=settings.DEBUG)
-
 app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
-templates = Jinja2Templates(directory="app/web/templates")
-templates.env.auto_reload = True
-templates.env.cache = {}
+app.state.templates = templates
+# templates = Jinja2Templates(directory="app/web/templates")
+# templates.env.auto_reload = True
+# templates.env.cache = {}
+# templates.env.globals["app_version"] = str(int(time.time()))
 
 # --- Middlewares de contexto/log
 app.add_middleware(RequestContextMiddleware)
@@ -127,7 +129,6 @@ app.add_middleware(
 app.add_middleware(CSPMiddleware)
 
 
-app.include_router(auth_router)
 app.include_router(dashboard_family_router)
 app.include_router(dashboard_professional_router)
 app.include_router(dashboard_coordination_router)
@@ -135,9 +136,14 @@ app.include_router(ui_router)
 app.include_router(slots_router)
 app.include_router(appt_wizard_router)
 app.include_router(professionals_router)
+app.include_router(api_auth_router)
 app.include_router(students_router)
 app.include_router(availability_router)
 app.include_router(public_appt_router)
+app.include_router(family.router)
+app.include_router(professional.router)
+app.include_router(coordination.router)
+app.include_router(auth.router)
 
 
 # --- Endpoints
@@ -178,11 +184,11 @@ def home_redirect(
 ):
     if not current_user:
         return RedirectResponse("/ui/login", status_code=303)
-    # mesmo roteamento da after-login
+    # mesmo roteamento da after-login (páginas não-UI)
     if current_user.role == Role.FAMILY:
-        return RedirectResponse("/ui/family/appointments", status_code=303)
+        return RedirectResponse("/family/dashboard", status_code=303)
     if current_user.role == Role.PROFESSIONAL:
-        return RedirectResponse("/ui/professional/week", status_code=303)
+        return RedirectResponse("/professional/dashboard", status_code=303)
     if current_user.role == Role.COORDINATION:
-        return RedirectResponse("/ui/coordination/overview", status_code=303)
+        return RedirectResponse("/coordination/dashboard", status_code=303)
     return RedirectResponse("/ui/login", status_code=303)

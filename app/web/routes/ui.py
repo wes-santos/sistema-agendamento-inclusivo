@@ -8,9 +8,8 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import and_, func, not_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload
-from starlette.datastructures import URL
 
 from app.db import get_db
 from app.deps import require_roles
@@ -19,7 +18,6 @@ from app.models.professional import Professional
 from app.models.student import Student
 from app.models.user import Role, User
 from app.schemas.dashboard_family import StudentApptItem, StudentApptSummary
-from app.utils.week import DEFAULT_TZ, week_bounds_local
 
 router = APIRouter(prefix="/ui", tags=["ui"])
 

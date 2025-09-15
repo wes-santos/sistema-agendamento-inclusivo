@@ -1,10 +1,15 @@
-<nav aria-label="Breadcrumbs" class="card" style="padding:.5rem 1rem">
-  <ol class="breadcrumbs">
-    {# Expects: trail = [(url, label), ...] with last item current #}
-    {% for url, label in trail[:-1] %}
-      <li><a href="{{ url }}">{{ label }}</a> /</li>
+{# Espera: "breadcrumbs" = lista de {label, href?}
+Último item é a página atual (sem href). #}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+  <ol class="breadcrumbs__list">
+    {% for crumb in breadcrumbs %}
+    <li class="breadcrumbs__item">
+      {% if loop.last or not crumb.href %}
+      <span class="breadcrumbs__current" aria-current="page">{{ crumb.label }}</span>
+      {% else %}
+      <a class="breadcrumbs__link" href="{{ crumb.href }}">{{ crumb.label }}</a>
+      {% endif %}
+    </li>
     {% endfor %}
-    {% set current = trail[-1] if trail and trail|length>0 else ('#','Atual') %}
-    <li aria-current="page">{{ current[1] }}</li>
   </ol>
 </nav>

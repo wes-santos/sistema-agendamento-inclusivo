@@ -1,0 +1,144 @@
+/* Reset/opiniões globais */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text);
+  font: 400 16px/1.55 var(--font-sans);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tipografia base */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0 0 0.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+p {
+  margin: 0 0 0.9rem;
+}
+small {
+  font-size: 0.875em;
+  color: var(--muted);
+}
+strong {
+  font-weight: 700;
+}
+em {
+  font-style: italic;
+}
+
+/* Links */
+a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+a:hover {
+  filter: brightness(0.95);
+}
+
+/* Imagens e mídia */
+img,
+svg,
+video,
+canvas,
+audio,
+iframe,
+embed,
+object {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Código */
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono);
+  font-size: 0.95em;
+}
+pre {
+  margin: 0 0 1rem;
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  overflow: auto;
+}
+
+/* Tabelas genéricas (componentes têm CSS próprio) */
+table {
+  border-collapse: collapse;
+}
+th,
+td {
+  vertical-align: top;
+}
+
+/* Formulários (opiniões suaves; componentes completam) */
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+button {
+  cursor: pointer;
+}
+
+/* Focus visível acessível */
+:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 3px var(--ring);
+  border-radius: calc(var(--radius) / 2);
+}
+
+/* Seleção de texto */
+::selection {
+  background: color-mix(in oklab, var(--brand) 28%, transparent);
+  color: var(--text);
+}
+
+/* Motion preferências */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Estrutura básica das regiões */
+main.container {
+  padding-block: 1.25rem 2rem;
+}
+
+/* Rodapé base (layout específico em 02-layout.css) */
+footer {
+  color: var(--muted);
+}

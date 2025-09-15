@@ -1,0 +1,165 @@
+/* ===== Coordenação ===== */
+
+/* GRID principal (fila + ações rápidas) */
+.page-coordination.page-coordination-dashboard .co-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  margin: 0.5rem 0 1rem;
+}
+@media (min-width: 1000px) {
+  .page-coordination.page-coordination-dashboard .co-grid {
+    grid-template-columns: 2fr 1fr;
+    align-items: stretch;
+  }
+}
+.page-coordination.page-coordination-dashboard .co-grid > .card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+}
+.page-coordination.page-coordination-dashboard .co-grid > .card .card__body {
+  align-content: start;
+  padding: 0.8rem 1rem;
+}
+
+/* ===== Fila (LISTA) ===== */
+.page-coordination.page-coordination-dashboard .queue {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.page-coordination.page-coordination-dashboard .queue__item {
+  display: grid;
+  grid-template-areas: "when who status actions";
+  grid-template-columns: 12rem 1fr auto auto;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  background: var(--surface-1);
+  padding: 0.55rem 0.7rem;
+}
+
+/* Áreas e labels */
+.page-coordination.page-coordination-dashboard .queue__when {
+  grid-area: when;
+  min-width: 0;
+}
+.page-coordination.page-coordination-dashboard .queue__who {
+  grid-area: who;
+  min-width: 0;
+}
+.page-coordination.page-coordination-dashboard .queue__status {
+  grid-area: status;
+  text-align: right;
+}
+.page-coordination.page-coordination-dashboard .queue__actions {
+  grid-area: actions;
+  justify-self: end;
+}
+
+.page-coordination.page-coordination-dashboard .queue__label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-bottom: 0.15rem;
+}
+
+.page-coordination.page-coordination-dashboard .q-name {
+  font-size: 1rem;
+}
+.page-coordination.page-coordination-dashboard .q-meta {
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+/* Ações compactas com wrap quando precisar */
+.page-coordination.page-coordination-dashboard .queue__actions {
+  display: inline-flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+/* Ellipsis utilitário local */
+.page-coordination.page-coordination-dashboard .ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Responsivo: empilha em 2 linhas (quem + ações acima; data + status abaixo) */
+@media (max-width: 900px) {
+  .page-coordination.page-coordination-dashboard .queue__item {
+    grid-template-areas:
+      "who    actions"
+      "when   status";
+    grid-template-columns: 1fr auto;
+    align-items: start;
+  }
+  .page-coordination.page-coordination-dashboard .queue__status {
+    text-align: left;
+  }
+}
+
+/* ===== Ações rápidas (grid 2×2) ===== */
+.page-coordination.page-coordination-dashboard .quick-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+}
+@media (min-width: 600px) {
+  .page-coordination.page-coordination-dashboard .quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ===== KPIs ===== */
+.page-coordination .kpi-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 820px) {
+  .page-coordination .kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.page-coordination .kpi {
+  display: grid;
+  gap: 0.2rem;
+  align-content: start;
+  min-height: 84px;
+}
+.page-coordination .kpi__label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+.page-coordination .kpi__value {
+  font-weight: 800;
+  font-size: 1.35rem;
+}
+
+/* ===== Reports — mantém o que já funcionava ===== */
+.page-coordination.page-coordination-reports .reports-filters {
+  position: sticky;
+  top: calc(var(--nav-height, 56px) + 0.5rem);
+  z-index: 20;
+  background: var(--page);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.page-coordination.page-coordination-reports .table {
+  table-layout: fixed;
+  width: 100%;
+}
+.page-coordination.page-coordination-reports .table__th,
+.page-coordination.page-coordination-reports .table__td {
+  padding: 0.5rem 0.65rem;
+}
+.page-coordination.page-coordination-reports .col-amount {
+  font-variant-numeric: tabular-nums;
+}
+
+.page-coordination .q-controls .input {
+  min-width: 18rem;
+}
