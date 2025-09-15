@@ -1,0 +1,110 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-coordination page-coordination-reports' %}
+
+{% from "components/card.html" import card %}
+{% from "components/table.html" import table %}
+{% from "components/form_field.html" import input_text, select %}
+
+{% block title %}Relatórios — Coordenação{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/coordination.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = breadcrumbs if breadcrumbs is defined else
+[{'label':'Coordenação','href':'/coordination/dashboard'},{'label':'Relatórios'}] %}
+{% include "_partials/breadcrumbs.html" %}
+
+{# FILTROS #}
+<section class="reports-filters">
+    <form method="get" action="/coordination/reports" class="hstack gap-2" role="search">
+        {{ input_text(name="date_from", type="date", label="De", value=(filters.date_from if filters is defined else
+        '')) }}
+        {{ input_text(name="date_to", type="date", label="Até", value=(filters.date_to if filters is defined else ''))
+        }}
+
+        {{ select(
+        name="group_by", label="Agrupar por",
+        options=[{'value':'day','label':'Dia'},{'value':'service','label':'Serviço'},{'value':'professional','label':'Profissional'}],
+        value=(filters.group_by if filters is defined else 'day')
+        ) }}
+
+        {{ select(
+        name="service_id", label="Serviço",
+        options=services|default([]), option_value="id", option_label="name",
+        value=(filters.service_id if filters is defined else ''), placeholder="Todos"
+        ) }}
+
+        {{ select(
+        name="professional_id", label="Profissional",
+        options=professionals|default([]), option_value="id", option_label="name",
+        value=(filters.professional_id if filters is defined else ''), placeholder="Todos"
+        ) }}
+
+        {{ select(
+        name="status", label="Status",
+        options=[{'value':'scheduled','label':'Agendado'},{'value':'confirmed','label':'Confirmado'},{'value':'canceled','label':'Cancelado'},{'value':'attended','label':'Compareceu'},{'value':'no_show','label':'Falta'}],
+        value=(filters.status if filters is defined else ''), placeholder="Todos"
+        ) }}
+
+        <div class="field">
+            <label class="field__label">&nbsp;</label>
+            <div class="filters-actions btnbar">
+                <button class="btn" type="submit">Aplicar</button>
+                <a class="btn btn--ghost" href="/coordination/reports">Limpar</a>
+                {% set export_url = export_url if export_url is defined else '/coordination/reports/export' %}
+                <a class="btn" href="{{ export_url }}?{{ persist_query|default('') }}">Exportar CSV</a>
+            </div>
+        </div>
+    </form>
+</section>
+
+{# KPIs do período #}
+<section class="kpi-grid section--tight">
+    {{ card(title="Total no período", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.total|default(0)) ~ '</div>
+        <div class="kpi__label">agendamentos</div>
+    </div>') }}
+    {{ card(title="Confirmados", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.confirmed|default(0)) ~ '</div>
+        <div class="kpi__label">sessões</div>
+    </div>') }}
+    {{ card(title="Cancelados", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.canceled|default(0)) ~ '</div>
+        <div class="kpi__label">sessões</div>
+    </div>') }}
+    {{ card(title="Comparecimento", subtitle="Taxa", body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.attendance_rate|default(0)) ~ '%</div>
+        <div class="kpi__label">do total</div>
+    </div>') }}
+</section>
+
+{# Tabela principal #}
+{% set label_col = (filters.group_by == 'day' and 'Data') or (filters.group_by == 'service' and 'Serviço') or
+'Profissional' %}
+{% set columns = [
+{'key':'label','label': label_col, 'class':'w-14rem'},
+{'key':'scheduled','label':'Agendados','align':'right','class':'w-8rem'},
+{'key':'confirmed','label':'Confirmados','align':'right','class':'w-8rem'},
+{'key':'attended','label':'Compareceu','align':'right','class':'w-8rem'},
+{'key':'canceled','label':'Cancelados','align':'right','class':'w-8rem'},
+{'key':'no_show','label':'Faltas','align':'right','class':'w-8rem'}
+] %}
+
+{{ table(
+columns=columns,
+rows=report_rows|default([]),
+caption="Relatório",
+empty_message="Sem dados para os filtros selecionados.",
+compact=True,
+responsive=True,
+striped=True,
+hover=True
+) }}
+
+{% if pagination is defined %}
+{% include "_partials/pagination.html" %}
+{% endif %}
+{% endblock %}

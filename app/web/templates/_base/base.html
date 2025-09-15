@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="theme-color" content="#000000" />
+
+    <title>{% block title %}Sistema de Agendamentos{% endblock %}</title>
+    {% block meta %}
+    <meta name="description" content="{% block description %}Plataforma de agendamentos inclusivos.{% endblock %}" />
+    {% endblock %}
+
+    <link rel="icon" href="{{ url_for('static', path='img/favicon.ico') }}?v={{ app_version|default('1') }}">
+    <link rel="apple-touch-icon"
+        href="{{ url_for('static', path='img/apple-touch-icon.png') }}?v={{ app_version|default('1') }}">
+
+    <!-- CSS base -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/00-tokens.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/01-base.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/02-layout.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/03-utilities.css') }}?v={{ app_version|default('1') }}">
+
+    <!-- Componentes -->
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/buttons.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/cards.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/tables.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/forms.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/badges.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/alerts.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/pagination.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/toast.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/breadcrumbs.css') }}?v={{ app_version|default('1') }}">
+    <link rel="stylesheet"
+        href="{{ url_for('static', path='css/10-components/modal.css') }}?v={{ app_version|default('1') }}">
+
+    <!-- CSS específico por página (AGORA funciona) -->
+    {% block extra_css %}{% endblock %}
+
+    <!-- Última camada para hotfixes -->
+    <link rel="stylesheet" href="{{ url_for('static', path='css/90-overrides.css') }}?v={{ app_version|default('1') }}">
+
+    {% block head_extras %}{% endblock %}
+</head>
+
+<body class="{{ body_class|default('') }}">
+    <a class="sr-only" href="#main">Pular para o conteúdo</a>
+
+    {% include "_base/nav.html" %}
+
+    <main id="main" class="container">
+        {% if breadcrumbs is defined and breadcrumbs %}
+        {% include "_partials/breadcrumbs.html" %}
+        {% endif %}
+        {% include "_partials/flash.html" %}
+        {% include "_partials/toast.html" %}
+
+        {% block actions %}{% endblock %}
+        {% block content %}{% endblock %}
+    </main>
+
+    {% include "_base/footer.html" %}
+
+    <script src="{{ url_for('static', path='js/main.js') }}?v={{ app_version|default('1') }}" defer></script>
+    <script src="{{ url_for('static', path='js/components/dialog.js') }}?v={{ app_version|default('1') }}"
+        defer></script>
+    <script src="{{ url_for('static', path='js/components/toast.js') }}?v={{ app_version|default('1') }}"
+        defer></script>
+    {% block extra_js %}{% endblock %}
+    {% block modals %}{% endblock %}
+    <noscript>Este site funciona melhor com JavaScript habilitado.</noscript>
+</body>
+
+</html>

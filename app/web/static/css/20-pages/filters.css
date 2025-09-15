@@ -1,0 +1,16 @@
+.filters-grid {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-end;
+}
+
+.filters-grid .field {
+    flex: 1 1 0px;
+}
+
+.btnbar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}

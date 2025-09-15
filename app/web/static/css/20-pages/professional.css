@@ -1,0 +1,177 @@
+/* Escopo geral do Profissional */
+.page-professional,
+.professional {
+}
+
+/* Dashboard do profissional: KPIs + próxima sessão */
+.page-professional .pro-grid,
+.professional .pro-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  margin: 0.5rem 0 1rem;
+}
+@media (min-width: 1000px) {
+  .page-professional .pro-grid,
+  .professional .pro-grid {
+    grid-template-columns: 2fr 1fr;
+  }
+}
+
+/* Agenda (semana/dia) — grade básica */
+.page-professional .schedule,
+.professional .schedule {
+  display: grid;
+  gap: 0.5rem;
+}
+
+/* Grade semanal: 7 colunas + times à esquerda (opcional) */
+.page-professional .schedule--week,
+.professional .schedule--week {
+  grid-template-columns: 100px repeat(7, minmax(0, 1fr));
+}
+
+/* Grade diária: colunas por profissional/serviço (se aplicável) */
+.page-professional .schedule--day,
+.professional .schedule--day {
+  grid-template-columns: 100px 1fr;
+}
+
+/* Cabeçalhos das colunas */
+.page-professional .schedule__head,
+.professional .schedule__head {
+  display: contents;
+}
+.page-professional .schedule__th,
+.professional .schedule__th {
+  padding: 0.5rem 0.6rem;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  font-weight: 700;
+  text-align: center;
+}
+.page-professional .schedule__th--time,
+.professional .schedule__th--time {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Linhas de tempo */
+.page-professional .schedule__row,
+.professional .schedule__row {
+  display: contents;
+}
+.page-professional .schedule__time,
+.professional .schedule__time {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--muted);
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Slots */
+.page-professional .slot,
+.professional .slot {
+  min-height: 48px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.3rem 0.5rem;
+  display: flex;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+.page-professional .slot.is-free,
+.professional .slot.is-free {
+  background: color-mix(in oklab, var(--success) 8%, #fff);
+  border-color: color-mix(in oklab, var(--success) 30%, #fff);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.page-professional .slot.is-busy,
+.professional .slot.is-busy {
+  background: color-mix(in oklab, var(--danger) 8%, #fff);
+  border-color: color-mix(in oklab, var(--danger) 30%, #fff);
+}
+.page-professional .slot.is-mine,
+.professional .slot.is-mine {
+  background: color-mix(in oklab, var(--brand) 10%, #fff);
+  border-color: color-mix(in oklab, var(--brand) 35%, #fff);
+}
+.page-professional .slot__title,
+.professional .slot__title {
+  font-weight: 600;
+}
+.page-professional .slot__meta,
+.professional .slot__meta {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Legenda */
+.page-professional .legend,
+.professional .legend {
+  display: inline-flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--muted);
+}
+.page-professional .legend .badge,
+.professional .legend .badge {
+  font-weight: 600;
+}
+
+/* ===== Profissional > Schedule: cabeçalho da semana ===== */
+.page-professional.page-professional-schedule .sched-head th {
+  text-align: center;
+  vertical-align: bottom;
+  padding: 0.6rem 0.5rem;
+}
+
+.page-professional.page-professional-schedule .day-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  line-height: 1.1;
+}
+
+.page-professional.page-professional-schedule .day-head__dow {
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: 0.2px;
+}
+
+.page-professional.page-professional-schedule .day-head__date {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums; /* números alinhados */
+  font-size: 0.9rem;
+}
+
+/* realce da coluna de hoje */
+.page-professional.page-professional-schedule .sched-day.is-today {
+  position: relative;
+}
+.page-professional.page-professional-schedule .sched-day.is-today::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  bottom: 0.35rem;
+  height: 3px;
+  background: var(--primary);
+  border-radius: 2px;
+}
+
+/* opcional: leve fundo na coluna de hoje */
+.page-professional.page-professional-schedule .grid .col.is-today .slot,
+.page-professional.page-professional-schedule .sched-day.is-today {
+  /* comente se não quiser o fundo */
+  /* background: color-mix(in oklab, var(--primary) 7%, transparent); */
+}

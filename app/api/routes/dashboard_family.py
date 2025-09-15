@@ -49,8 +49,8 @@ def list_my_appointments(  # noqa: PLR0913
     ),
 ):
     # Monta filtros base
-    now_utc = datetime.now(UTC).astimezone()
-    conds = [Appointment.student_id == current_user.id]
+    now_utc = datetime.now(UTC)
+    conds = []
 
     if range == "upcoming":
         conds.append(Appointment.starts_at >= now_utc)
@@ -71,8 +71,12 @@ def list_my_appointments(  # noqa: PLR0913
             or_(Appointment.service.ilike(like), Appointment.location.ilike(like))
         )
 
+    # Sempre filtra por alunos sob o responsável logado
     query = (
-        db.query(Appointment).filter(and_(*conds)).order_by(Appointment.starts_at.asc())
+        db.query(Appointment)
+        .join(Student, Appointment.student_id == Student.id)
+        .filter(and_(Student.guardian_user_id == current_user.id, *conds))
+        .order_by(Appointment.starts_at.asc())
     )
 
     # total antes da paginação
@@ -137,7 +141,7 @@ def list_my_appointments(  # noqa: PLR0913
             start_at_utc=ap.starts_at,
             end_at_utc=ap.ends_at,
             start_at_local=(ap.starts_at.astimezone(tz) if tz else None),
-            end_at_local=(ap.end_at.astimezone(tz) if tz else None),
+            end_at_local=(ap.ends_at.astimezone(tz) if tz else None),
             location=ap.location,
             professional_id=ap.professional_id,
             professional_name=prof_name,

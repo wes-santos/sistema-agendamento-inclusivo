@@ -1,0 +1,92 @@
+/* Wrapper responsivo */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table-wrap--compact .table {
+  font-size: 0.92rem;
+}
+
+/* Tabela base */
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius, 0.625rem);
+}
+.table__caption {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  color: var(--muted, #6b7280);
+  caption-side: top;
+}
+.table__head th {
+  background: var(--surface-1, #fafafa);
+  color: var(--text, #0a0a0a);
+}
+.table__th,
+.table__td {
+  padding: 0.7rem 0.9rem;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  vertical-align: middle;
+}
+.table__th {
+  font-weight: 600;
+  text-align: left;
+}
+.table__td {
+  color: var(--text, #0a0a0a);
+}
+.table__row:last-child .table__td {
+  border-bottom: 0;
+}
+
+/* Alinhamentos */
+.table .is-left {
+  text-align: left;
+}
+.table .is-center {
+  text-align: center;
+}
+.table .is-right {
+  text-align: right;
+}
+
+/* Listras e hover */
+.table--striped .table__body .table__row:nth-child(odd) {
+  background: var(--surface, #fff);
+}
+.table--striped .table__body .table__row:nth-child(even) {
+  background: var(--surface-1, #fafafa);
+}
+.table--hover .table__body .table__row:hover {
+  background: color-mix(in oklab, var(--brand, #3b82f6) 4%, transparent);
+}
+
+/* Vazio */
+.table__row--empty td {
+  text-align: center;
+  padding: 1.25rem;
+}
+.table__empty {
+  color: var(--muted, #6b7280);
+}
+
+/* Células com badge/estado podem usar .col-status para largura fixa */
+.col-status {
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* variantes */
+.table--dense th,
+.table--dense td {
+  padding: 0.45rem 0.6rem;
+}
+.table--fixed {
+  table-layout: fixed;
+  width: 100%;
+}

@@ -1,0 +1,15 @@
+/* ⚠️ Overrides temporários (hotfixes).
+   Regra de uso:
+   - Adicione aqui apenas ajustes emergenciais específicos.
+   - Sempre com comentários explicando o porquê e TODO para remoção.
+   - Evite !important; se precisar, documente.
+*/
+
+/* Exemplo: corrigir overflow em uma célula específica até revisar o componente */
+/* TODO: remover após ajustar o markup da célula de ações na tabela de appointments */
+.page-family-appointments [data-col-key="actions"] {
+  /* overflow: visible;  // descomente se necessário para menus/tooltip saírem da célula */
+}
+
+/* Debug helper (aplicar no body quando precisar visualizar boxes) */
+/* body.debug-layout * { outline: 1px dashed color-mix(in oklab, var(--brand) 35%, #0003); } */

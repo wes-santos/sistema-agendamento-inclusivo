@@ -1,0 +1,219 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-family page-family-dashboard' %}
+
+{% from "components/card.html" import card %}
+{% from "components/badge.html" import status_badge %}
+{% from "components/table.html" import table %}
+{% from "components/empty_state.html" import empty_state %}
+{% from "_partials/modal.html" import confirm %}
+
+{% block title %}Dashboard — Família{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/20-pages/family.css') }}?v={{ app_version|default('1') }}">
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/family-dashboard.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+
+{% block content %}
+
+{# Breadcrumbs padrão #}
+{% set breadcrumbs = breadcrumbs if breadcrumbs is defined else [
+{'label': 'Início'},
+] %}
+{% include "_partials/breadcrumbs.html" %}
+
+{# HERO: Próximo agendamento + ações rápidas #}
+<section class="family-hero">
+    {# Próximo agendamento #}
+    {% if next_appointment %}
+
+    {# ações pro HEADER no desktop; ficam ocultas no mobile #}
+    {% set header_actions %}
+    <div class="btnbar only-desktop">
+        {% if next_appointment.confirm_url %}
+        <a class="btn btn--success" href="{{ next_appointment.confirm_url }}">Confirmar presença</a>
+        {% endif %}
+        {% if next_appointment.cancel_url %}
+        <button class="btn btn--danger" type="button" data-action="cancel"
+            data-cancel-url="{{ next_appointment.cancel_url }}" data-appt-id="{{ next_appointment.id }}">
+            Cancelar
+        </button>
+        {% endif %}
+        <a class="btn btn--ghost" href="{{ url_for('family_appointments') }}">Ver meus agendamentos</a>
+    </div>
+    {% endset %}
+
+    {% call card(
+    title="Próximo agendamento",
+    subtitle=next_appointment.starts_at_human|default(next_appointment.starts_at_local),
+    variant='highlight',
+    actions_html=header_actions
+    ) %}
+    <div class="next-appt">
+        <div class="next-appt__main">
+            <div class="next-appt__service">
+                <strong>{{ next_appointment.service_name }}</strong>
+                <div class="text-muted">{{ next_appointment.professional_name }}</div>
+            </div>
+            <div class="next-appt__time">
+                <div>{{ next_appointment.starts_at_local }}</div>
+                {% if next_appointment.ends_at_local %}
+                <div class="text-muted">até {{ next_appointment.ends_at_local }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="next-appt__meta">
+            {% if next_appointment.location %}
+            <div class="next-appt__loc">📍 {{ next_appointment.location }}</div>
+            {% endif %}
+            <div class="next-appt__status">
+                {{ status_badge(next_appointment.status) }}
+            </div>
+        </div>
+
+        {# ações no CORPO para mobile; ficam ocultas no desktop #}
+        <div class="next-appt__actions only-mobile">
+            {% if next_appointment.confirm_url %}
+            <a class="btn btn--success" href="{{ next_appointment.confirm_url }}">Confirmar presença</a>
+            {% endif %}
+            {% if next_appointment.cancel_url %}
+            <button class="btn btn--danger" type="button" data-action="cancel"
+                data-cancel-url="{{ next_appointment.cancel_url }}" data-appt-id="{{ next_appointment.id }}">
+                Cancelar
+            </button>
+            {% endif %}
+            <a class="btn btn--ghost" href="/family/appointments">Ver meus agendamentos</a>
+        </div>
+    </div>
+    {% endcall %}
+
+    {% else %}
+    {{ card(
+    title="Você não tem um próximo agendamento",
+    body_html=empty_state(
+    title="Sem agendamentos futuros",
+    message="Quando houver um próximo agendamento, ele aparecerá aqui.",
+    actions_html='<a class="btn" href="/family/appointments">Ver meus agendamentos</a>',
+    icon="📅",
+    size="md"
+    )
+    ) }}
+    {% endif %}
+
+
+    {# Ações rápidas #}
+    {% call card(title="Ações rápidas") %}
+    <nav class="quick-actions">
+        <a class="btn btn--block" href="/family/appointments">Ver todos</a>
+        <a class="btn btn--secondary btn--block" href="/family/appointments?status=confirmed">Confirmados</a>
+        <a class="btn btn--secondary btn--block" href="/family/appointments?status=past">Histórico</a>
+        <a class="btn btn--secondary btn--block" href="/family/appointments?status=canceled">Cancelados</a>
+    </nav>
+    {% endcall %}
+
+</section>
+
+{# KPIs #}
+<section class="family-cards">
+    {{ card(
+    title="Futuros",
+    subtitle="Próximos 30 dias",
+    body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.upcoming_30d|default(0)) ~ '</div>
+        <div class="kpi__label">agendamentos</div>
+    </div>'
+    ) }}
+    {{ card(
+    title="Confirmados",
+    subtitle="Últimos 30 dias",
+    body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.confirmed_30d|default(0)) ~ '</div>
+        <div class="kpi__label">agendamentos</div>
+    </div>'
+    ) }}
+    {{ card(
+    title="Cancelados",
+    subtitle="Últimos 30 dias",
+    body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.canceled_30d|default(0)) ~ '</div>
+        <div class="kpi__label">agendamentos</div>
+    </div>'
+    ) }}
+    {{ card(
+    title="Total do mês",
+    subtitle=kpis.month_label|default("Este mês"),
+    body_html='<div class="kpi">
+        <div class="kpi__value">' ~ (kpis.total_month|default(0)) ~ '</div>
+        <div class="kpi__label">agendamentos</div>
+    </div>'
+    ) }}
+</section>
+
+{# Recentes #}
+<section class="section">
+    {% set columns = [
+    {'key':'service_name','label':'Serviço'},
+    {'key':'professional_name','label':'Profissional'},
+    {'key':'starts_at_local','label':'Início','align':'right','class':'w-10rem nowrap'},
+    {'key':'status','label':'Status','class':'col-status nowrap'},
+    {'key':'actions','label':'','align':'center','class':'col-status nowrap'}
+    ] %}
+
+
+    {% set ns = namespace(rows=[]) %}
+    {% for a in (recent_appointments or []) %}
+    {% set _status_html %}{{ status_badge(a.status) }}{% endset %}
+    {% set _actions_html %}
+    <div class="row-actions">
+        <a class="btn btn--ghost btn--sm" href="{{ url_for('family_appointment_detail', appt_id=a.id) }}">Detalhes</a>
+        {% if a.cancel_url and a.status not in ['canceled','cancelado'] %}
+        <button class="btn btn--danger btn--sm" type="button" data-action="cancel" data-cancel-url="{{ a.cancel_url }}"
+            data-appt-id="{{ a.id }}">
+            Cancelar
+        </button>
+        {% endif %}
+    </div>
+    {% endset %}
+
+    {% set _ = ns.rows.append({
+    'id': a.id,
+    'service_name': a.service_name,
+    'professional_name': a.professional_name,
+    'starts_at_local': a.starts_at_local,
+    'status': a.status,
+    '_html': {'status': _status_html, 'actions': _actions_html}
+    }) %}
+    {% endfor %}
+
+    {{ table(
+    columns=columns,
+    rows=ns.rows,
+    caption="Recentes",
+    empty_message="Nenhum agendamento recente."
+    ) }}
+
+    {% if recent_pagination is defined %}
+    {% include "_partials/pagination.html" with context %}
+    {% endif %}
+</section>
+
+{# Modal de confirmação de cancelamento (reuso do macro) #}
+{{ confirm(
+id="cancel-modal",
+title="Cancelar agendamento",
+message="Tem certeza que deseja cancelar este agendamento? Esta ação não pode ser desfeita.",
+confirm_label="Cancelar",
+cancel_label="Voltar",
+destructive=True
+) }}
+
+{% endblock %}
+
+{% block extra_js %}
+{# Reutiliza o mesmo JS que abre o modal e navega para o cancel_url #}
+<script src="{{ url_for('static', path='js/pages/family-appointments.js') }}?v={{ app_version|default('1') }}"
+    defer></script>
+{% endblock %}

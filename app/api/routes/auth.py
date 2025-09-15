@@ -1,237 +1,107 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
-from fastapi.responses import RedirectResponse
-from httpcore import request
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from app.audit.helpers import record_audit
 from app.core.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
-    hash_password,
-    validate_password_policy,
     verify_password,
 )
-from app.core.settings import settings
-from app.deps import get_current_user, get_db, require_roles
-from app.models.professional import Professional
-from app.models.user import Role, User
+from app.core.settings import Settings, TokenPair, settings
+from app.db import get_db
+from app.models.user import User
 from app.schemas.auth import LoginIn, LoginOut
-from app.schemas.users import UserCreate, UserOut
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-# Helper: set/unset cookies when USE_COOKIE_AUTH is True
-COOKIE_MAX_AGE_ACCESS = settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
-COOKIE_MAX_AGE_REFRESH = settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
-
-
-def _set_auth_cookies(response: Response, access: str, refresh: str) -> None:
-    if not settings.USE_COOKIE_AUTH:
-        return
-    response.set_cookie(
+def _set_auth_cookies(resp: Response, access: str, refresh: str) -> None:
+    cookie_kwargs = dict(
+        httponly=True,
+        secure=bool(settings.SECURE_COOKIES),
+        samesite="lax",
+        path="/",
+        domain=settings.COOKIE_DOMAIN or None,
+    )
+    resp.set_cookie(
         key="access_token",
         value=access,
-        httponly=True,
-        secure=settings.SECURE_COOKIES,
-        samesite="lax",
-        domain=settings.COOKIE_DOMAIN,
-        max_age=COOKIE_MAX_AGE_ACCESS,
-        path="/",
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        **cookie_kwargs,
     )
-    response.set_cookie(
+    resp.set_cookie(
         key="refresh_token",
         value=refresh,
-        httponly=True,
-        secure=settings.SECURE_COOKIES,
-        samesite="lax",
-        domain=settings.COOKIE_DOMAIN,
-        max_age=COOKIE_MAX_AGE_REFRESH,
-        path="/auth/refresh",
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        **cookie_kwargs,
     )
-
-
-def _delete_auth_cookies(resp: Response, secure: bool = False):
-    if not settings.USE_COOKIE_AUTH:
-        return
-    resp.delete_cookie(
-        "access_token", path="/", samesite="lax", secure=secure, httponly=True
-    )
-    resp.delete_cookie(
-        "refresh_token", path="/", samesite="lax", secure=secure, httponly=True
-    )
-    # resp.delete_cookie("csrf_token", path="/", samesite="lax", secure=secure)
-
-
-@router.post("/register", response_model=UserOut, status_code=status.HTTP_201_CREATED)
-def register_user(payload: UserCreate, db: Session = Depends(get_db)):  # noqa: B008
-    # simple example; in prod validate uniqueness & email confirmation flows
-    if db.query(User).filter(User.email == payload.email).first():
-        raise HTTPException(status_code=400, detail="E-mail já cadastrado")
-
-    try:
-        validate_password_policy(payload.password)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e)) from ValueError
-
-    user = User(
-        email=payload.email,
-        name=payload.name,
-        password_hash=hash_password(payload.password),
-        role=payload.role,
-    )
-
-    prof = None
-    if user.role == Role.PROFESSIONAL and payload.professional_id is None:
-        prof = Professional(
-            name=user.name or user.email.split("@")[0],
-            speciality=None,
-            is_active=True,
-            user_id=user.id,
-        )
-        db.add(prof)
-
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    if prof:
-        db.refresh(prof)
-
-    return user
 
 
 @router.post("/login", response_model=LoginOut)
-def login(
-    data: LoginIn, request: Request, response: Response, db: Session = Depends(get_db)
-):
-    user: User | None = db.query(User).filter(User.email == data.email).first()
-    if not user or not verify_password(data.password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas"
-        )
-    if not user.is_active:
-        raise HTTPException(status_code=403, detail="Usuário inativo")
+def api_login(payload: LoginIn, response: Response, db: Session = Depends(get_db)) -> LoginOut:
+    user: User | None = db.query(User).filter(User.email == payload.email).one_or_none()
+    if not user or not user.is_active or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciais inválidas")
 
     access = create_access_token(str(user.id))
     refresh = create_refresh_token(str(user.id))
 
-    _set_auth_cookies(response, access, refresh)
+    # Optionally set HttpOnly cookies (useful for frontends)
+    if settings.USE_COOKIE_AUTH:
+        _set_auth_cookies(response, access, refresh)
 
-    record_audit(
-        db,
-        request=request,
-        user_id=user.id,
-        action="LOGIN",
-        entity="user",
-        entity_id=user.id,
-        autocommit=True,
-    )
-
-    # If using cookies only, you can omit returning the tokens
-    return LoginOut(
-        access_token=None if settings.USE_COOKIE_AUTH else access,
-        refresh_token=None if settings.USE_COOKIE_AUTH else refresh,
-    )
+    return LoginOut(access_token=access, refresh_token=refresh, token_type="bearer")
 
 
-@router.api_route(
-    "/logout",
-    methods=["GET", "POST"],
-    name="logout",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-def logout(request: Request, db: Session = Depends(get_db)):
-    next_url = request.query_params.get("next") or "/ui/login"
-    resp = RedirectResponse(url=next_url, status_code=status.HTTP_303_SEE_OTHER)
+@router.get("/me")
+def api_me(request: Request, db: Session = Depends(get_db)):
+    # Reuse dependency logic from app.deps by importing lazily to avoid cycles
+    from app.deps import get_current_user
 
-    # limpa cookies de auth
-    secure = request.url.scheme == "https"
-    _delete_auth_cookies(resp, secure=secure)
+    user = get_current_user(request, db)  # raises 401 appropriately
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "role": getattr(user.role, "value", str(user.role)),
+        "is_active": user.is_active,
+    }
 
-    current_user_id = request.session.get("user_id") or None
-    record_audit(
-        db,
-        request=request,
-        user_id=current_user_id,
-        action="LOGOUT",
-        entity="user",
-        entity_id=current_user_id,
-        autocommit=True,
-    )
 
-    # zera a sessão, mas deixa um flash para feedback
-    try:
-        request.session.clear()
-        request.session["flash"] = "Você saiu com sucesso."
-    except Exception:
-        pass
-
-    return resp
+@router.post("/logout")
+def api_logout(response: Response):
+    # Clear auth cookies (JWTs are stateless; this only affects cookie-based flows)
+    for k in ("access_token", "refresh_token"):
+        response.delete_cookie(k, path="/")
+    return {"ok": True}
 
 
 @router.post("/refresh", response_model=LoginOut)
-def refresh(request: Request, response: Response, db: Session = Depends(get_db)):  # noqa: B008
-    # Support refresh via cookie OR Authorization header
-    token = request.cookies.get("refresh_token") if settings.USE_COOKIE_AUTH else None
+def api_refresh(request: Request) -> LoginOut:
+    # Expect refresh token in Authorization: Bearer <token> or cookie
+    auth = request.headers.get("Authorization")
+    token: str | None = None
+    if auth and auth.lower().startswith("bearer "):
+        token = auth.split(" ", 1)[1]
     if not token:
-        auth = request.headers.get("Authorization")
-        if auth and auth.lower().startswith("bearer "):
-            token = auth.split(" ", 1)[1]
-
+        token = request.cookies.get("refresh_token")
     if not token:
         raise HTTPException(status_code=401, detail="Refresh token ausente")
 
     try:
         payload = decode_token(token, expected_type="refresh")
     except ValueError:
-        raise HTTPException(
-            status_code=401, detail="Refresh token inválido ou expirado"
-        ) from ValueError
+        raise HTTPException(status_code=401, detail="Refresh token inválido") from ValueError
 
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=401, detail="Token malformado")
+    sub = payload.get("sub")
+    if not sub:
+        raise HTTPException(status_code=401, detail="Refresh token malformado")
 
-    user: User | None = db.query(User).get(int(user_id))
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="Usuário inativo ou inexistente")
+    access = create_access_token(str(sub))
+    refresh = create_refresh_token(str(sub))
+    return LoginOut(access_token=access, refresh_token=refresh)
 
-    access = create_access_token(str(user.id))
-    refresh_new = create_refresh_token(str(user.id))
-
-    _set_auth_cookies(response, access, refresh_new)
-
-    return LoginOut(
-        access_token=None if settings.USE_COOKIE_AUTH else access,
-        refresh_token=None if settings.USE_COOKIE_AUTH else refresh_new,
-    )
-
-
-@router.get("/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user)):  # noqa: B008
-    return user
-
-
-@router.get("/only-coordination")
-def only_coordination(
-    user: User = Depends(require_roles(Role.COORDINATION)),
-):
-    return {"ok": True, "user_role": user.role}
-
-
-@router.get("/only-professional")
-def only_professional(
-    user: User = Depends(require_roles(Role.PROFESSIONAL)),
-):
-    return {"ok": True, "user_role": user.role}
-
-
-@router.get("/only-family")
-def only_family(
-    user: User = Depends(require_roles(Role.FAMILY)),
-):
-    return {"ok": True, "user_role": user.role}

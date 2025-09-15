@@ -1,0 +1,29 @@
+/* ===== Auth ===== */
+.page-auth .auth-wrap {
+  display: grid;
+  place-items: center;
+  min-height: calc(100vh - 160px);
+  padding: 1rem;
+}
+
+.page-auth .card {
+  width: 100%;
+  max-width: 420px;
+}
+
+.page-auth .auth-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.page-auth .auth-actions {
+  margin-top: 0.25rem;
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.page-auth .auth-note {
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}

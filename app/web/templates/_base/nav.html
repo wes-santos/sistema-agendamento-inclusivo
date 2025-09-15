@@ -1,0 +1,79 @@
+{# Navegação principal.
+Regras de exibição por perfil:
+- Se current_user.roles (lista) ou current_user.role (string) estiverem disponíveis, usamos isso.
+- Ajuste os hrefs conforme suas rotas reais.
+#}
+{% set path = request.url.path %}
+<nav class="nav" aria-label="Principal">
+    <div class="nav__inner container">
+        <a class="nav__brand" href="/">
+            <span class="nav__brand-name">Agendamentos</span>
+        </a>
+
+        <button class="nav__toggle" type="button" data-nav-toggle aria-expanded="false" aria-controls="nav-menu">
+            <span class="sr-only">Abrir menu</span>
+            ☰
+        </button>
+
+        <div id="nav-menu" class="nav__menu" data-nav-menu>
+            <ul class="nav__list">
+                {# Família #}
+                {% if (current_user is defined) and (
+                ('FAMILY' in (current_user.roles or [])) or (current_user.role|default('') == 'FAMILY')
+                ) %}
+                <li class="nav__item">
+                    <a href="/family/appointments"
+                        class="nav__link {{ 'is-active' if path.startswith('/family/appointments') else '' }}"
+                        aria-current="{{ 'page' if path.startswith('/family/appointments') else '' }}">
+                        Meus agendamentos
+                    </a>
+                </li>
+                {% endif %}
+
+                {# Profissional #}
+                {% if (current_user is defined) and (
+                ('PROFESSIONAL' in (current_user.roles or [])) or (current_user.role|default('') == 'PROFESSIONAL')
+                ) %}
+                <li class="nav__item">
+                    <a href="/professional/schedule"
+                        class="nav__link {{ 'is-active' if path.startswith('/professional/schedule') else '' }}"
+                        aria-current="{{ 'page' if path.startswith('/professional/schedule') else '' }}">
+                        Agenda
+                    </a>
+                </li>
+                {% endif %}
+
+                {# Coordenação #}
+                {% if (current_user is defined) and (
+                ('COORDINATION' in (current_user.roles or [])) or (current_user.role|default('') == 'COORDINATION')
+                ) %}
+                <li class="nav__item">
+                    <a href="/coordination/dashboard"
+                        class="nav__link {{ 'is-active' if path.startswith('/coordination/dashboard') else '' }}"
+                        aria-current="{{ 'page' if path.startswith('/coordination/dashboard') else '' }}">
+                        Coordenação
+                    </a>
+                </li>
+                <li class="nav__item">
+                    <a href="/coordination/reports"
+                        class="nav__link {{ 'is-active' if path.startswith('/coordination/reports') else '' }}"
+                        aria-current="{{ 'page' if path.startswith('/coordination/reports') else '' }}">
+                        Relatórios
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+
+            <!-- <div class="nav__actions"> -->
+            <div class="topbar__auth">
+                {% if current_user %}
+                <span class="me-2 text-muted">Olá, {{ current_user.name }}</span>
+                <a class="btn btn--secondary" href="{{ url_for('auth_logout') }}?next=/login">Sair</a>
+                {% else %}
+                <a class="btn" href="{{ url_for('auth_login_get') }}?next={{ request.url.path }}">Entrar</a>
+                {% endif %}
+            </div>
+            <!-- </div> -->
+        </div>
+    </div>
+</nav>

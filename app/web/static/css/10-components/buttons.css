@@ -1,0 +1,86 @@
+/* Botões básicos */
+.btn {
+  --_bg: var(--brand, #3b82f6);
+  --_fg: var(--on-brand, #fff);
+  --_bd: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.9rem;
+  font: 500 0.95rem/1.2 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu,
+    Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji",
+    "Segoe UI Emoji";
+  color: var(--_fg);
+  background: var(--_bg);
+  border: 1px solid var(--_bd);
+  border-radius: var(--radius, 0.625rem);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.06));
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform 0.05s ease, background 0.2s ease, box-shadow 0.2s ease,
+    border-color 0.2s ease, color 0.2s ease;
+  user-select: none;
+}
+.btn:hover {
+  filter: brightness(0.97);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Variantes */
+.btn--secondary {
+  --_bg: var(--surface-2, #eef2ff);
+  --_fg: var(--text, #0a0a0a);
+  --_bd: var(--border, #e5e7eb);
+}
+.btn--ghost {
+  --_bg: transparent;
+  --_fg: var(--text, #0a0a0a);
+  --_bd: var(--border, #e5e7eb);
+}
+.btn--danger {
+  --_bg: var(--danger, #ef4444);
+  --_fg: var(--on-danger, #fff);
+}
+.btn--success {
+  --_bg: var(--success, #16a34a);
+  --_fg: #fff;
+}
+.btn--info {
+  --_bg: var(--info, #0ea5e9);
+  --_fg: #fff;
+}
+.btn--warning {
+  --_bg: var(--warning, #f59e0b);
+  --_fg: #111;
+}
+
+/* Tamanhos */
+.btn--sm {
+  padding: 0.45rem 0.7rem;
+  font-size: 0.85rem;
+}
+.btn--lg {
+  padding: 0.8rem 1.1rem;
+  font-size: 1.05rem;
+}
+
+/* Ícones “só” */
+.btn-icon {
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+}
+
+/* Largura total do botão no container */
+.btn--block {
+  width: 100%;
+  justify-content: center;
+}

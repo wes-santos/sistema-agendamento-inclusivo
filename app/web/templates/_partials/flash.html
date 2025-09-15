@@ -1,4 +1,12 @@
-{% set flash_msg = request.session.pop('flash', None) %}
-{% if flash_msg %}
-  <div class="card" role="status" aria-live="polite">{{ flash_msg }}</div>
+{# Espera: "flashes" = lista de {type, message, title?}
+type ∈ {success, info, warning, error} → classes: .alert--{type} #}
+{% if flashes is defined and flashes %}
+<section class="flash" role="region" aria-label="Mensagens">
+  {% for f in flashes %}
+  <div class="alert alert--{{ f.type|default('info') }}" role="status" aria-live="polite">
+    {% if f.title %}<strong class="alert__title">{{ f.title }}</strong>{% endif %}
+    <div class="alert__content">{{ f.message }}</div>
+  </div>
+  {% endfor %}
+</section>
 {% endif %}
