@@ -14,20 +14,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse
 
 import app.db.base
-from app.api.routes.appointments_wizard import router as appt_wizard_router
-from app.api.routes.availability import router as availability_router
-from app.api.routes.dashboard_coordination import (
-    router as dashboard_coordination_router,
-)
-from app.api.routes.dashboard_family import router as dashboard_family_router
-from app.api.routes.dashboard_professional import (
-    router as dashboard_professional_router,
-)
-from app.api.routes.professionals import router as professionals_router
-from app.api.routes.auth import router as api_auth_router
-from app.api.routes.public_appointments import router as public_appt_router
-from app.api.routes.slots import router as slots_router
-from app.api.routes.students import router as students_router
+from app.api.main import api_router
 from app.core.logging import configure_logging, get_logger
 from app.core.security import CSPMiddleware
 from app.core.settings import settings
@@ -36,7 +23,6 @@ from app.middlewares.telemetry import RequestContextMiddleware
 from app.models.user import Role, User
 from app.version import APP_VERSION, BUILD_TIME_UTC, GIT_SHA
 from app.web.routes import auth, coordination, family, professional
-from app.web.routes.ui import router as ui_router
 from app.web.templating import templates
 
 configure_logging(json=True, level="INFO")
@@ -129,17 +115,10 @@ app.add_middleware(
 app.add_middleware(CSPMiddleware)
 
 
-app.include_router(dashboard_family_router)
-app.include_router(dashboard_professional_router)
-app.include_router(dashboard_coordination_router)
-app.include_router(ui_router)
-app.include_router(slots_router)
-app.include_router(appt_wizard_router)
-app.include_router(professionals_router)
-app.include_router(api_auth_router)
-app.include_router(students_router)
-app.include_router(availability_router)
-app.include_router(public_appt_router)
+# Include the new API router with version prefix
+app.include_router(api_router)
+
+# Keep existing web UI routers
 app.include_router(family.router)
 app.include_router(professional.router)
 app.include_router(coordination.router)
@@ -169,21 +148,12 @@ async def not_found(_, __):
     return JSONResponse({"detail": "Not Found"}, status_code=404)
 
 
-@app.exception_handler(HTTPException)
-async def ui_http_exception_handler(request, exc):
-    path = request.url.path
-    if path.startswith("/ui/") and exc.status_code in (401, 403):
-        nxt = quote(str(request.url), safe="")
-        return RedirectResponse(url=f"/ui/login?next={nxt}", status_code=303)
-    return await http_exception_handler(request, exc)
-
-
 @app.get("/")
 def home_redirect(
     current_user: Annotated[User | None, Depends(get_current_user)] = None,
 ):
     if not current_user:
-        return RedirectResponse("/ui/login", status_code=303)
+        return RedirectResponse("/login", status_code=303)
     # mesmo roteamento da after-login (páginas não-UI)
     if current_user.role == Role.FAMILY:
         return RedirectResponse("/family/dashboard", status_code=303)
@@ -191,4 +161,4 @@ def home_redirect(
         return RedirectResponse("/professional/dashboard", status_code=303)
     if current_user.role == Role.COORDINATION:
         return RedirectResponse("/coordination/dashboard", status_code=303)
-    return RedirectResponse("/ui/login", status_code=303)
+    return RedirectResponse("/login", status_code=303)

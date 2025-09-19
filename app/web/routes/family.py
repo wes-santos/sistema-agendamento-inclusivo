@@ -1,17 +1,22 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Annotated, Any
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
-from fastapi import APIRouter, Depends, Request
-from fastapi.params import Query
-from fastapi.responses import HTMLResponse
-from sqlalchemy.orm import Session
+
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.params import Query as QueryParam
+from fastapi.responses import HTMLResponse, RedirectResponse
+from sqlalchemy import and_, func, or_
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.settings import settings
-from app.db.session import get_db
+from app.db import get_db
 from app.deps import require_roles
-from app.models.user import Role, User
 from app.models.appointment import Appointment, AppointmentStatus
-from app.models.student import Student
 from app.models.professional import Professional
+from app.models.student import Student
+from app.models.user import Role, User
+from app.schemas.dashboard_family import StudentApptItem, StudentApptSummary
 from app.web.templating import render
 
 router = APIRouter()
@@ -321,8 +326,6 @@ def ui_family_appointment_detail(
         appts = _demo_family_appts(datetime.now())
         appt = next((a for a in appts if str(a["id"]) == str(appt_id)), None)
         if not appt:
-            from fastapi.responses import RedirectResponse
-
             return RedirectResponse("/family/appointments", status_code=303)
         return render(
             request,
@@ -341,8 +344,6 @@ def ui_family_appointment_detail(
         .one_or_none()
     )
     if not row:
-        from fastapi.responses import RedirectResponse
-
         return RedirectResponse("/family/dashboard", status_code=303)
 
     ap, pr, st = row
@@ -379,3 +380,324 @@ def ui_family_dashboard(
     demo: bool = False,  # ?demo=1 para ver conteúdo fake
 ):
     return _render_family_dashboard(request, current_user, db, demo)
+
+
+# ---------------------------
+# Family Appointments Route
+# ---------------------------
+
+# Helper functions (duplicates from ui.py, but we'll keep them here for now)
+def _ensure_tz(tz_local: str):
+    try:
+        tz = ZoneInfo(tz_local)
+    except Exception:
+        tz = ZoneInfo("America/Sao_Paulo")
+    return tz
+
+
+def _week_bounds_local(anchor: date, tz) -> tuple[datetime, datetime]:
+    # segunda às 00:00 até segunda seguinte 00:00
+    start_local_date = anchor - timedelta(days=anchor.weekday())
+    start_local = datetime.combine(start_local_date, time.min, tzinfo=tz)
+    end_local = start_local + timedelta(days=7)
+    return start_local, end_local
+
+
+def _fmt_period(d: date) -> str:
+    # Ex.: 01 set 2025
+    meses = [
+        "jan",
+        "fev",
+        "mar",
+        "abr",
+        "mai",
+        "jun",
+        "jul",
+        "ago",
+        "set",
+        "out",
+        "nov",
+        "dez",
+    ]
+    return f"{d.day:02d} {meses[d.month-1]} {d.year}"
+
+
+def _status_key(s) -> str:
+    # Normaliza o status para STRING UPPER (compatível com template)
+    try:
+        # Enum: usa .name (SCHEDULED, CONFIRMED, DONE, CANCELLED...)
+        return s.name.upper()
+    except Exception:
+        return str(s or "").strip().upper()
+
+
+def _get_col(model, *names):
+    for n in names:
+        if hasattr(model, n):
+            return getattr(model, n)
+    return None
+
+
+def _make_url_factory(request: Request, page_param: str = "page"):
+    def make_url(
+        path: str,
+        params: Mapping[str, Any] | None = None,
+        *,
+        keep: Iterable[str] | None = None,
+        **kwargs,
+    ) -> str:
+        base = str(request.base_url).rstrip("/")
+        query = {}
+
+        if keep:
+            current = dict(request.query_params)
+            query.update({k: v for k, v in current.items() if k in set(keep)})
+
+        if params:
+            query.update({k: v for k, v in params.items() if v is not None})
+
+        if kwargs:
+            query.update({k: v for k, v in kwargs.items() if v is not None})
+
+        qs = ("?" + urlencode(query, doseq=True)) if query else ""
+        return f"{base}{path}{qs}"
+
+    return make_url
+
+
+def _fmt_dt_local(dt: datetime | None, tz: ZoneInfo) -> str:
+    if not dt:
+        return "-"
+    d = dt.astimezone(tz)
+    # Ex.: 02/09/2025 14:30
+    return d.strftime("%d/%m/%Y %H:%M")
+
+
+def _period_str(d: date) -> str:
+    # Ex.: 01 set 2025
+    meses = [
+        "jan",
+        "fev",
+        "mar",
+        "abr",
+        "mai",
+        "jun",
+        "jul",
+        "ago",
+        "set",
+        "out",
+        "nov",
+        "dez",
+    ]
+    return f"{d.day:02d} {meses[d.month-1]} {d.year}"
+
+
+def _status_matches(key: str, needle_list: list[str]) -> bool:
+    lk = key.lower()
+    return any(n in lk for n in needle_list)
+
+
+def _build_url(base: str, params: dict) -> str:
+    clean = {k: v for k, v in params.items() if v not in (None, "")}
+    qs = urlencode(clean, doseq=True)
+    return f"{base}?{qs}" if qs else base
+
+
+def _fmt_local(dtval: datetime | None, tz):
+    if not isinstance(dtval, datetime):
+        return "-"
+    if dtval.tzinfo is None:
+        dtval = dtval.replace(tzinfo=UTC)
+    return dtval.astimezone(tz).strftime("%d/%m/%Y %H:%M")
+
+
+@router.get("/family/appointments")
+def ui_family_appointments(
+    request: Request,
+    current_user: Annotated[User, Depends(require_roles(Role.FAMILY))],
+    db: Annotated[Session, Depends(get_db)],
+    range: str = Query(default="upcoming", pattern="^(upcoming|past|all)$"),
+    status: str | None = Query(default=None),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
+    q: str | None = None,
+    page: int = 1,
+    page_size: int = 10,
+    tz_local: str = "America/Sao_Paulo",
+):
+    tz = _ensure_tz(tz_local)
+
+    # Fallback de colunas (starts_at/ends_at ou *_utc)
+    START_COL = Appointment.starts_at
+
+    # Momento agora em UTC-aware para comparação
+    now_utc = datetime.now(UTC)
+
+    qbase = (
+        db.query(Appointment)
+        .join(Student, Appointment.student_id == Student.id)
+        .options(joinedload(Appointment.student), joinedload(Appointment.professional))
+        .filter(Student.guardian_user_id == current_user.id)
+    )
+
+    # Filtro de período
+    if range == "upcoming":
+        qbase = qbase.filter(START_COL >= now_utc)
+    elif range == "past":
+        qbase = qbase.filter(START_COL < now_utc)
+
+    # Status (aceita Enum ou str)
+    if status:
+        try:
+            st = AppointmentStatus(status)
+            qbase = qbase.filter(Appointment.status == st)
+        except Exception:
+            qbase = qbase.filter(
+                func.lower(func.cast(Appointment.status, func.TEXT)).like(
+                    f"%{status.lower()}%"
+                )
+            )
+
+    # Date range (se vierem naive, assume UTC-naive)
+    if date_from:
+        if date_from.tzinfo is None:
+            date_from = date_from.replace(tzinfo=UTC)
+        qbase = qbase.filter(START_COL >= date_from)
+    if date_to:
+        if date_to.tzinfo is None:
+            date_to = date_to.replace(tzinfo=UTC)
+        qbase = qbase.filter(START_COL < date_to)
+
+    # Busca (serviço/local) – CORRIGIDO o like
+    if q:
+        like = f"%{q.strip()}%"
+        parts = []
+        if hasattr(Appointment, "service"):
+            parts.append(Appointment.service.ilike(like))
+        if hasattr(Appointment, "location"):
+            parts.append(Appointment.location.ilike(like))
+        if parts:
+            qbase = qbase.filter(or_(*parts))
+
+    qbase = qbase.order_by(START_COL.asc())
+
+    # Paginação
+    total_items = qbase.count()
+    page = max(1, page)
+    page_size = max(1, min(100, page_size))
+    items = qbase.offset((page - 1) * page_size).limit(page_size).all()
+    total_pages = max(1, (total_items + page_size - 1) // page_size)
+
+    # Contagem por status (do guardião, sem janela de tempo)
+    rows = (
+        db.query(Appointment.status, func.count(Appointment.id))
+        .join(Student, Appointment.student_id == Student.id)
+        .filter(Student.guardian_user_id == current_user.id)
+        .group_by(Appointment.status)
+        .all()
+    )
+    count_by_status = {
+        (s.name if hasattr(s, "name") else str(s)): int(c) for (s, c) in rows
+    }
+
+    # Próximo agendamento (não cancelado)
+    next_appt = (
+        db.query(Appointment)
+        .join(Student, Appointment.student_id == Student.id)
+        .filter(
+            Student.guardian_user_id == current_user.id,
+            START_COL >= now_utc,
+            Appointment.status != AppointmentStatus.CANCELLED,
+        )
+        .order_by(START_COL.asc())
+        .first()
+    )
+
+    next_appt_dt = next_appt.starts_at if next_appt else None
+    next_appt_str = _fmt_local(next_appt_dt, tz) if next_appt_dt else None
+
+    # Builders auxiliares
+    def _to_item(ap: Appointment) -> StudentApptItem:
+        starts_utc = getattr(ap, "starts_at", getattr(ap, "starts_at_utc", None))
+        ends_utc = getattr(ap, "ends_at", getattr(ap, "ends_at_utc", None))
+        prof_name = None
+        try:
+            prof = getattr(ap, "professional", None)
+            if prof is not None:
+                prof_name = getattr(prof, "name", None) or getattr(prof, "email", None)
+        except Exception:
+            pass
+        return StudentApptItem(
+            id=ap.id,
+            service=getattr(ap, "service", None),
+            status=ap.status,
+            start_at_utc=starts_utc,
+            end_at_utc=ends_utc,
+            start_at_local=(starts_utc.astimezone(tz) if (tz and starts_utc) else None),
+            end_at_local=(ends_utc.astimezone(tz) if (tz and ends_utc) else None),
+            location=getattr(ap, "location", None),
+            professional_id=ap.professional_id,
+            professional_name=prof_name,
+        )
+
+    summary = StudentApptSummary(
+        total_upcoming=int(
+            count_by_status.get("SCHEDULED", 0) + count_by_status.get("CONFIRMED", 0)
+        ),
+        total_past=int(count_by_status.get("DONE", 0)),
+        total_cancelled=int(count_by_status.get("CANCELLED", 0)),
+        next_appointment_start_utc=(
+            getattr(next_appt, "starts_at", getattr(next_appt, "starts_at_utc", None))
+            if next_appt
+            else None
+        ),
+        next_appointment_service=(
+            getattr(next_appt, "service", None) if next_appt else None
+        ),
+    )
+
+    # URLs de paginação e limpar
+    base_path = str(request.url_for("ui_family_appointments"))
+    base_params = {
+        "range": range,
+        "status": status or "",
+        "q": q or "",
+        "page_size": page_size,
+        "tz_local": tz.key,
+    }
+    page_prev_url = (
+        _build_url(base_path, {**base_params, "page": page - 1}) if page > 1 else None
+    )
+    page_next_url = (
+        _build_url(base_path, {**base_params, "page": page + 1})
+        if page < total_pages
+        else None
+    )
+    clear_filters_url = _build_url(
+        base_path,
+        {"range": "upcoming", "page": 1, "page_size": page_size, "tz_local": tz.key},
+    )
+
+    trail = [("/", "Início"), ("/family/appointments", "Meus agendamentos")]
+
+    return render(
+        request,
+        "pages/family_appointments.html",  # novo template (abaixo)
+        {
+            "current_user": current_user,
+            "items": [_to_item(ap) for ap in items],
+            "summary": summary,
+            "next_appt_str": next_appt_str,
+            "page": page,
+            "page_size": page_size,
+            "total_items": total_items,
+            "total_pages": total_pages,
+            "page_prev_url": page_prev_url,
+            "page_next_url": page_next_url,
+            "clear_filters_url": clear_filters_url,
+            "range": range,
+            "status": status,
+            "q": q or "",
+            "trail": trail,
+        },
+    )

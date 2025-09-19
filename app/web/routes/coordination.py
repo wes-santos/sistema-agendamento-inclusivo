@@ -1,24 +1,26 @@
 # app/web/routes/coordination.py
 from __future__ import annotations
 
-from collections.abc import Iterable
-from datetime import date, datetime, time, timedelta
+from calendar import monthrange
+from collections.abc import Iterable, Mapping
+from datetime import UTC, date, datetime, time, timedelta
 from io import StringIO
+from typing import Annotated, Any
 from urllib.parse import urlencode
-from typing import Any
+from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
+from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func, case
 
-# Ajuste estes imports para o seu projeto
-from app.db.session import get_db
+from app.db import get_db
 from app.deps import require_roles
-from app.models.user import Role, User
 from app.models.appointment import Appointment, AppointmentStatus
-from app.models.student import Student
 from app.models.professional import Professional
+from app.models.student import Student
+from app.models.user import Role, User
+from app.schemas.dashboard_family import StudentApptItem, StudentApptSummary
 from app.web.templating import render
 
 router = APIRouter()
@@ -291,9 +293,6 @@ def _render_coordination_dashboard(
         )
     else:
         # Dados reais do banco
-        from datetime import UTC, datetime
-        from zoneinfo import ZoneInfo
-
         tz = ZoneInfo("America/Sao_Paulo")
         now = datetime.now(UTC)
 
@@ -447,8 +446,6 @@ def _render_coordination_reports(
     elif quick == "month":
         date_from = default_from
         # fim do mês: pega início do próximo mês - 1 dia
-        from calendar import monthrange
-
         last_day = monthrange(today.year, today.month)[1]
         date_to = today.replace(day=last_day)
     else:
@@ -458,6 +455,9 @@ def _render_coordination_reports(
     service_id = filters.get("service_id") or None
     professional_id = filters.get("professional_id") or None
     status = filters.get("status") or None
+
+    # Timezone for date conversions
+    tz = ZoneInfo("America/Sao_Paulo")
 
     # Opções de filtro
     if demo:
@@ -501,13 +501,12 @@ def _render_coordination_reports(
         }
     else:
         # Dados reais
-        from sqlalchemy import func, case
-        from datetime import UTC, datetime
-        from zoneinfo import ZoneInfo
-
-        tz = ZoneInfo("America/Sao_Paulo")
-        start_dt = datetime.combine(date_from, time.min, tzinfo=tz).astimezone(UTC)
-        end_dt = datetime.combine(date_to, time.max, tzinfo=tz).astimezone(UTC)
+        start_dt = datetime.combine(date_from, time.min, tzinfo=tz).astimezone(
+            ZoneInfo("UTC")
+        )
+        end_dt = datetime.combine(date_to, time.max, tzinfo=tz).astimezone(
+            ZoneInfo("UTC")
+        )
 
         base = db.query(Appointment).filter(
             Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt
@@ -547,7 +546,7 @@ def _render_coordination_reports(
         # Agrupamento
         if group_by == "day":
             dtexpr = func.date_trunc("day", Appointment.starts_at).label("d")
-            rows_raw = (
+            day_query = (
                 db.query(
                     dtexpr,
                     func.count().label("n"),
@@ -565,6 +564,31 @@ def _render_coordination_reports(
                     ),
                 )
                 .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
+            )
+            
+            # Apply filters to the day query
+            if service_id:
+                day_query = day_query.filter(Appointment.service == service_id)
+            if professional_id:
+                try:
+                    pid = int(professional_id)
+                except Exception:
+                    pid = None
+                if pid is not None:
+                    day_query = day_query.filter(Appointment.professional_id == pid)
+            if status:
+                st = status.lower()
+                if st == "scheduled":
+                    day_query = day_query.filter(Appointment.status == AppointmentStatus.SCHEDULED)
+                elif st == "confirmed":
+                    day_query = day_query.filter(Appointment.status == AppointmentStatus.CONFIRMED)
+                elif st.startswith("cancel"):
+                    day_query = day_query.filter(Appointment.status == AppointmentStatus.CANCELLED)
+                elif st in ("attended", "done", "past"):
+                    day_query = day_query.filter(Appointment.status == AppointmentStatus.DONE)
+            
+            rows_raw = (
+                day_query
                 .group_by(dtexpr)
                 .order_by(dtexpr)
                 .all()
@@ -581,7 +605,7 @@ def _render_coordination_reports(
                 for r in rows_raw
             ]
         elif group_by == "service":
-            rows_raw = (
+            service_query = (
                 db.query(
                     Appointment.service.label("label"),
                     func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
@@ -598,6 +622,29 @@ def _render_coordination_reports(
                     ),
                 )
                 .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
+            )
+            
+            # Apply filters to the service query
+            if professional_id:
+                try:
+                    pid = int(professional_id)
+                except Exception:
+                    pid = None
+                if pid is not None:
+                    service_query = service_query.filter(Appointment.professional_id == pid)
+            if status:
+                st = status.lower()
+                if st == "scheduled":
+                    service_query = service_query.filter(Appointment.status == AppointmentStatus.SCHEDULED)
+                elif st == "confirmed":
+                    service_query = service_query.filter(Appointment.status == AppointmentStatus.CONFIRMED)
+                elif st.startswith("cancel"):
+                    service_query = service_query.filter(Appointment.status == AppointmentStatus.CANCELLED)
+                elif st in ("attended", "done", "past"):
+                    service_query = service_query.filter(Appointment.status == AppointmentStatus.DONE)
+            
+            rows_raw = (
+                service_query
                 .group_by(Appointment.service)
                 .order_by(Appointment.service)
                 .all()
@@ -614,7 +661,7 @@ def _render_coordination_reports(
                 for r in rows_raw
             ]
         else:  # professional
-            rows_raw = (
+            professional_query = (
                 db.query(
                     Professional.name.label("label"),
                     func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
@@ -632,6 +679,24 @@ def _render_coordination_reports(
                 )
                 .join(Professional, Professional.id == Appointment.professional_id)
                 .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
+            )
+            
+            # Apply filters to the professional query
+            if service_id:
+                professional_query = professional_query.filter(Appointment.service == service_id)
+            if status:
+                st = status.lower()
+                if st == "scheduled":
+                    professional_query = professional_query.filter(Appointment.status == AppointmentStatus.SCHEDULED)
+                elif st == "confirmed":
+                    professional_query = professional_query.filter(Appointment.status == AppointmentStatus.CONFIRMED)
+                elif st.startswith("cancel"):
+                    professional_query = professional_query.filter(Appointment.status == AppointmentStatus.CANCELLED)
+                elif st in ("attended", "done", "past"):
+                    professional_query = professional_query.filter(Appointment.status == AppointmentStatus.DONE)
+            
+            rows_raw = (
+                professional_query
                 .group_by(Professional.name)
                 .order_by(Professional.name)
                 .all()
@@ -749,12 +814,9 @@ def export_coordination_reports_csv(
     df = parse_iso(date_from) or default_from
     dt = parse_iso(date_to) or today
 
-    from datetime import UTC, datetime
-    from zoneinfo import ZoneInfo
-
     tz = ZoneInfo("America/Sao_Paulo")
-    start_dt = datetime.combine(df, time.min, tzinfo=tz).astimezone(UTC)
-    end_dt = datetime.combine(dt, time.max, tzinfo=tz).astimezone(UTC)
+    start_dt = datetime.combine(df, time.min, tzinfo=tz).astimezone(ZoneInfo("UTC"))
+    end_dt = datetime.combine(dt, time.max, tzinfo=tz).astimezone(ZoneInfo("UTC"))
 
     base = db.query(Appointment).filter(
         Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt
@@ -781,13 +843,12 @@ def export_coordination_reports_csv(
 
     # Agrupar conforme group_by
     buf = StringIO()
-    buf.write("label,scheduled,confirmed,attended,canceled,no_show\n")
+    buf.write("label,scheduled,confirmed,attended,canceled,no_show\\n")
 
     if group_by == "day":
-        dtexpr = func.date_trunc("day", Appointment.starts_at)
-        rows = (
+        day_query = (
             db.query(
-                dtexpr.label("label"),
+                func.date_trunc("day", Appointment.starts_at).label("label"),
                 func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
                     "scheduled"
                 ),
@@ -802,17 +863,37 @@ def export_coordination_reports_csv(
                 ),
             )
             .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
-            .group_by(dtexpr)
-            .order_by(dtexpr)
-            .all()
         )
+        
+        # Apply filters to the day query
+        if service_id:
+            day_query = day_query.filter(Appointment.service == service_id)
+        if professional_id:
+            try:
+                pid = int(professional_id)
+            except Exception:
+                pid = None
+            if pid is not None:
+                day_query = day_query.filter(Appointment.professional_id == pid)
+        if status:
+            st = status.lower()
+            if st == "scheduled":
+                day_query = day_query.filter(Appointment.status == AppointmentStatus.SCHEDULED)
+            elif st == "confirmed":
+                day_query = day_query.filter(Appointment.status == AppointmentStatus.CONFIRMED)
+            elif st.startswith("cancel"):
+                day_query = day_query.filter(Appointment.status == AppointmentStatus.CANCELLED)
+            elif st in ("attended", "done", "past"):
+                day_query = day_query.filter(Appointment.status == AppointmentStatus.DONE)
+        
+        rows = day_query.group_by(func.date_trunc("day", Appointment.starts_at)).order_by(func.date_trunc("day", Appointment.starts_at)).all()
         for r in rows:
             label = r.label.astimezone(tz).date().isoformat()
             buf.write(
-                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\n"
+                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\\n"
             )
     elif group_by == "service":
-        rows = (
+        service_query = (
             db.query(
                 Appointment.service.label("label"),
                 func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
@@ -829,17 +910,35 @@ def export_coordination_reports_csv(
                 ),
             )
             .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
-            .group_by(Appointment.service)
-            .order_by(Appointment.service)
-            .all()
         )
+        
+        # Apply filters to the service query
+        if professional_id:
+            try:
+                pid = int(professional_id)
+            except Exception:
+                pid = None
+            if pid is not None:
+                service_query = service_query.filter(Appointment.professional_id == pid)
+        if status:
+            st = status.lower()
+            if st == "scheduled":
+                service_query = service_query.filter(Appointment.status == AppointmentStatus.SCHEDULED)
+            elif st == "confirmed":
+                service_query = service_query.filter(Appointment.status == AppointmentStatus.CONFIRMED)
+            elif st.startswith("cancel"):
+                service_query = service_query.filter(Appointment.status == AppointmentStatus.CANCELLED)
+            elif st in ("attended", "done", "past"):
+                service_query = service_query.filter(Appointment.status == AppointmentStatus.DONE)
+        
+        rows = service_query.group_by(Appointment.service).order_by(Appointment.service).all()
         for r in rows:
             label = r.label or "(sem descrição)"
             buf.write(
-                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\n"
+                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\\n"
             )
     else:  # professional
-        rows = (
+        professional_query = (
             db.query(
                 Professional.name.label("label"),
                 func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
@@ -857,14 +956,27 @@ def export_coordination_reports_csv(
             )
             .join(Professional, Professional.id == Appointment.professional_id)
             .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
-            .group_by(Professional.name)
-            .order_by(Professional.name)
-            .all()
         )
+        
+        # Apply filters to the professional query
+        if service_id:
+            professional_query = professional_query.filter(Appointment.service == service_id)
+        if status:
+            st = status.lower()
+            if st == "scheduled":
+                professional_query = professional_query.filter(Appointment.status == AppointmentStatus.SCHEDULED)
+            elif st == "confirmed":
+                professional_query = professional_query.filter(Appointment.status == AppointmentStatus.CONFIRMED)
+            elif st.startswith("cancel"):
+                professional_query = professional_query.filter(Appointment.status == AppointmentStatus.CANCELLED)
+            elif st in ("attended", "done", "past"):
+                professional_query = professional_query.filter(Appointment.status == AppointmentStatus.DONE)
+        
+        rows = professional_query.group_by(Professional.name).order_by(Professional.name).all()
         for r in rows:
             label = r.label or "(Profissional)"
             buf.write(
-                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\n"
+                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\\n"
             )
 
     filename = f'reports_{group_by}_{df.strftime("%Y%m%d")}_{dt.strftime("%Y%m%d")}.csv'
@@ -873,3 +985,325 @@ def export_coordination_reports_csv(
         "Content-Disposition": f'attachment; filename="{filename}"',
     }
     return Response(content=buf.getvalue(), headers=headers)
+
+
+# ---------------------------
+# Coordination Overview Route
+# ---------------------------
+
+# Helper functions (duplicates from ui.py, but we'll keep them here for now)
+def _ensure_tz(tz_local: str):
+    try:
+        tz = ZoneInfo(tz_local)
+    except Exception:
+        tz = ZoneInfo("America/Sao_Paulo")
+    return tz
+
+
+def _week_bounds_local(anchor: date, tz) -> tuple[datetime, datetime]:
+    # segunda às 00:00 até segunda seguinte 00:00
+    start_local_date = anchor - timedelta(days=anchor.weekday())
+    start_local = datetime.combine(start_local_date, time.min, tzinfo=tz)
+    end_local = start_local + timedelta(days=7)
+    return start_local, end_local
+
+
+def _get_col(model, *names):
+    for n in names:
+        if hasattr(model, n):
+            return getattr(model, n)
+    return None
+
+
+def _status_key(s) -> str:
+    # Normaliza o status para STRING UPPER (compatível com template)
+    try:
+        # Enum: usa .name (SCHEDULED, CONFIRMED, DONE, CANCELLED...)
+        return s.name.upper()
+    except Exception:
+        return str(s or "").strip().upper()
+
+
+def _status_matches(key: str, needle_list: list[str]) -> bool:
+    lk = key.lower()
+    return any(n in lk for n in needle_list)
+
+
+def _build_url(base: str, params: dict) -> str:
+    clean = {k: v for k, v in params.items() if v not in (None, "")}
+    qs = urlencode(clean, doseq=True)
+    return f"{base}?{qs}" if qs else base
+
+
+def _fmt_local(dtval: datetime | None, tz):
+    if not isinstance(dtval, datetime):
+        return "-"
+    if dtval.tzinfo is None:
+        dtval = dtval.replace(tzinfo=UTC)
+    return dtval.astimezone(tz).strftime("%d/%m/%Y %H:%M")
+
+
+def _fmt_period(d: date) -> str:
+    # Ex.: 01 set 2025
+    meses = [
+        "jan",
+        "fev",
+        "mar",
+        "abr",
+        "mai",
+        "jun",
+        "jul",
+        "ago",
+        "set",
+        "out",
+        "nov",
+        "dez",
+    ]
+    return f"{d.day:02d} {meses[d.month-1]} {d.year}"
+
+
+@router.get("/coordination/overview", name="coordination_overview")
+def coordination_overview(
+    request: Request,
+    current_user: Annotated[User, Depends(require_roles(Role.COORDINATION))],
+    db: Annotated[Session, Depends(get_db)],
+    week_start: date | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    tz_local: str = "America/Sao_Paulo",
+    limit_lists: int = Query(default=10, ge=1, le=50),
+):
+    tz = _ensure_tz(tz_local)
+
+    # Resolve janela local
+    if date_from and date_to:
+        start_local = datetime.combine(date_from, time.min, tzinfo=tz)
+        end_local = datetime.combine(date_to, time.min, tzinfo=tz)
+    elif date_from and not date_to:
+        start_local = datetime.combine(date_from, time.min, tzinfo=tz)
+        end_local = start_local + timedelta(days=7)
+    elif week_start:
+        start_local, end_local = _week_bounds_local(week_start, tz)
+    else:
+        today_local = datetime.now(tz).date()
+        start_local, end_local = _week_bounds_local(today_local, tz)
+
+    # UTC bounds (colunas fallback)
+    START_COL = _get_col(Appointment, "starts_at", "starts_at_utc")
+    END_COL = _get_col(Appointment, "ends_at", "ends_at_utc")
+    if START_COL is None or END_COL is None:
+        raise RuntimeError("Appointment precisa de starts_at/ends_at (ou *_utc)")
+
+    start_utc = (
+        start_local.astimezone(ZoneInfo("UTC"))
+        if hasattr(datetime, "timezone")
+        else start_local
+    )
+    end_utc = (
+        end_local.astimezone(ZoneInfo("UTC"))
+        if hasattr(datetime, "timezone")
+        else end_local
+    )
+
+    # Contagem por status
+    rows = (
+        db.query(Appointment.status, func.count(Appointment.id))
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
+        .group_by(Appointment.status)
+        .all()
+    )
+    count_by_status = {_status_key(s): int(c) for (s, c) in rows}
+    total_appointments = sum(count_by_status.values())
+    cancel_rate = (
+        (count_by_status.get("CANCELLED", 0) / total_appointments)
+        if total_appointments
+        else 0.0
+    )
+
+    # Profissionais/estudantes ativos
+    professionals_active = (
+        db.query(func.count(func.distinct(Appointment.professional_id)))
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
+        .scalar()
+        or 0
+    )
+    students_active = (
+        db.query(func.count(func.distinct(Appointment.student_id)))
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
+        .scalar()
+        or 0
+    )
+
+    # Série diária
+    series_map: dict[date, dict[str, int]] = {}
+    cur = start_local
+    while cur < end_local:
+        series_map[cur.date()] = {
+            "SCHEDULED": 0,
+            "CONFIRMED": 0,
+            "DONE": 0,
+            "CANCELLED": 0,
+        }
+        cur += timedelta(days=1)
+
+    for s, dt in db.query(Appointment.status, START_COL).filter(
+        and_(START_COL >= start_utc, START_COL < end_utc)
+    ):
+        s_key = _status_key(s)
+        d_local = dt.astimezone(tz).date()
+        if d_local in series_map:
+            series_map[d_local][s_key] = series_map[d_local].get(s_key, 0) + 1
+
+    series_daily = [
+        {
+            "date_local": d,
+            "count_total": sum(counts.values()),
+            "count_by_status": counts,
+        }
+        for d, counts in sorted(series_map.items())
+    ]
+
+    # Top profissionais
+    prof_rows = (
+        db.query(Appointment.professional_id, func.count(Appointment.id))
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
+        .group_by(Appointment.professional_id)
+        .order_by(func.count(Appointment.id).desc())
+        .limit(limit_lists)
+        .all()
+    )
+    prof_ids = [pid for (pid, _c) in prof_rows]
+    name_map = (
+        {
+            u.id: (getattr(u, "name", None) or getattr(u, "email", None))
+            for u in db.query(User).filter(User.id.in_(prof_ids)).all()
+        }
+        if prof_ids
+        else {}
+    )
+    top_professionals = [
+        {
+            "professional_id": int(pid),
+            "professional_name": name_map.get(pid),
+            "count": int(c),
+        }
+        for (pid, c) in prof_rows
+    ]
+
+    # Top serviços
+    svc_rows = (
+        db.query(Appointment.service, func.count(Appointment.id))
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
+        .group_by(Appointment.service)
+        .order_by(func.count(Appointment.id).desc())
+        .limit(limit_lists)
+        .all()
+    )
+    top_services = [
+        {"service": s or "(sem descrição)", "count": int(c)} for (s, c) in svc_rows
+    ]
+
+    # Recentes
+    recent_rows = (
+        db.query(Appointment)
+        .filter(and_(START_COL >= start_utc, START_COL < end_utc))
+        .order_by(getattr(Appointment, "created_at", START_COL).desc())
+        .limit(limit_lists)
+        .all()
+    )
+    stud_ids = list({r.student_id for r in recent_rows})
+    pro_ids = list({r.professional_id for r in recent_rows})
+
+    stud_map = (
+        {
+            u.id: (getattr(u, "name", None) or getattr(u, "email", None))
+            for u in db.query(User).filter(User.id.in_(stud_ids)).all()
+        }
+        if stud_ids
+        else {}
+    )
+    pro_map = (
+        {
+            u.id: (getattr(u, "name", None) or getattr(u, "email", None))
+            for u in db.query(User).filter(User.id.in_(pro_ids)).all()
+        }
+        if pro_ids
+        else {}
+    )
+
+    def _fmt_local(dt):
+        return dt.astimezone(tz).strftime("%d/%m %H:%M") if dt else "-"
+
+    recent = [
+        {
+            "id": r.id,
+            "service": getattr(r, "service", None),
+            "status": _status_key(getattr(r, "status", None)),
+            "starts_at": getattr(r, "starts_at", getattr(r, "starts_at_utc", None)),
+            "starts_at_str": _fmt_local(
+                getattr(r, "starts_at", getattr(r, "starts_at_utc", None))
+            ),
+            "professional_id": r.professional_id,
+            "professional_name": pro_map.get(r.professional_id),
+            "student_id": r.student_id,
+            "student_name": stud_map.get(r.student_id),
+        }
+        for r in recent_rows
+    ]
+
+    # Navegação semanal (prev/next)
+    base_path = str(request.url_for("coordination_overview"))
+    prev_week = (start_local.date() - timedelta(days=7)).isoformat()
+    next_week = (start_local.date() + timedelta(days=7)).isoformat()
+
+    prev_url = _build_url(
+        base_path,
+        {"week_start": prev_week, "tz_local": tz_local, "limit_lists": limit_lists},
+    )
+    next_url = _build_url(
+        base_path,
+        {"week_start": next_week, "tz_local": tz_local, "limit_lists": limit_lists},
+    )
+    clear_filters_url = _build_url(
+        base_path, {"week_start": start_local.date().isoformat(), "tz_local": tz_local}
+    )
+
+    summary = {
+        "window_start_local": start_local.date(),
+        "window_end_local": (end_local - timedelta(days=1)).date(),  # inclusivo
+        "timezone": tz_local,
+        "period_start_str": _fmt_period(start_local.date()),
+        "period_end_str": _fmt_period((end_local - timedelta(days=1)).date()),
+        "total_appointments": total_appointments,
+        "count_by_status": count_by_status,
+        "cancel_rate": cancel_rate,
+        "professionals_active": int(professionals_active),
+        "families_active": int(students_active),
+    }
+
+    trail = [
+        ("/", "Início"),
+        ("/coordination/overview", "Coordenação — Visão geral"),
+    ]
+
+    def jinja_url_for(name: str, **params) -> str:
+        return str(request.url_for(name, **params))
+
+    return render(
+        request,
+        "pages/coordination_overview.html",
+        {
+            "current_user": current_user,
+            "summary": summary,
+            "series_daily": series_daily,
+            "top_professionals": top_professionals,
+            "top_services": top_services,
+            "recent": recent,
+            "prev_url": prev_url,
+            "next_url": next_url,
+            "clear_filters_url": clear_filters_url,
+            "trail": trail,
+            "url_for": jinja_url_for,
+            "csp_nonce": getattr(request.state, "csp_nonce", None),
+        },
+    )
