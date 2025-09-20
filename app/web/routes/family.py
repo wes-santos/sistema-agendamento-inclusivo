@@ -3,9 +3,9 @@ from typing import Annotated, Any
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.params import Query as QueryParam
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -249,52 +249,56 @@ def ui_family_appointments(
     except Exception:
         df = None
     try:
-        dt_ = datetime.fromisoformat(date_to) if date_to else None
+        dt = datetime.fromisoformat(date_to) if date_to else None
     except Exception:
-        dt_ = None
+        dt = None
     if df:
-        if df.tzinfo is None:
-            df = df.replace(tzinfo=UTC)
-        q = q.filter(Appointment.starts_at >= df)
-    if dt_:
-        if dt_.tzinfo is None:
-            dt_ = dt_.replace(tzinfo=UTC)
-        q = q.filter(Appointment.starts_at < dt_)
+        q = q.filter(Appointment.starts_at >= df.astimezone(UTC))
+    if dt:
+        # dt + 1 dia para incluir todo o dia
+        dt_end = dt + timedelta(days=1)
+        q = q.filter(Appointment.starts_at < dt_end.astimezone(UTC))
 
-    # filtro por serviço
-    if service_id:
-        q = q.filter(Appointment.service == service_id)
-
-    rows = q.order_by(Appointment.starts_at.desc()).all()
-
-    def _to_item(ap: Appointment, prof: Professional, stud: Student) -> dict:
-        return {
-            "id": ap.id,
-            "service_name": ap.service,
-            "professional_name": prof.name or getattr(prof.user, "name", None),
-            "starts_at_local": _fmt_local(ap.starts_at, tz),
-            "ends_at_local": _fmt_local(ap.ends_at, tz),
-            "status": _to_badge_status(ap.status),
-            "confirm_url": None,
-            "cancel_url": None,
-        }
-
-    items = [_to_item(ap, pr, st) for (ap, pr, st) in rows]
-    # services options (distinct)
-    services = [
-        {"id": s, "name": s}
-        for (s,) in (
+    # serviços (usando DISTINCT na coluna service)
+    try:
+        svc_rows = (
             db.query(Appointment.service)
-            .join(Student, Student.id == Appointment.student_id)
+            .join(Student)
             .filter(Student.guardian_user_id == current_user.id)
             .distinct()
             .order_by(Appointment.service.asc())
             .all()
         )
-    ]
+        services = [
+            {"id": s or "", "name": s or "(sem descrição)"} for (s,) in svc_rows if s
+        ]
+    except Exception:
+        services = []
+
+    # ordenação (mais recentes primeiro)
+    q = q.order_by(Appointment.starts_at.desc())
+
+    # paginação (opcional, por enquanto tudo)
+    appts = []
+    for ap, pr, st in q.all():
+        starts_local = ap.starts_at.astimezone(tz)
+        ends_local = ap.ends_at.astimezone(tz) if ap.ends_at else None
+        appts.append(
+            {
+                "id": ap.id,
+                "service_name": ap.service,
+                "professional_name": pr.name or getattr(pr.user, "name", None),
+                "starts_at_local": _fmt_local(starts_local, tz),
+                "ends_at_local": _fmt_local(ends_local, tz) if ends_local else None,
+                "status": _to_badge_status(ap.status),
+                "confirm_url": None,
+                "cancel_url": None,
+            }
+        )
+
     ctx = {
         "current_user": current_user,
-        "appointments": items,
+        "appointments": appts,
         "filters": {
             "status": status or "",
             "date_from": date_from or "",
@@ -305,6 +309,221 @@ def ui_family_appointments(
         "pagination": None,
     }
     return render(request, "pages/family/appointments.html", ctx)
+
+
+# CREATE APPOINTMENT FORM
+@router.get(
+    "/family/appointments/new", 
+    response_class=HTMLResponse, 
+    name="family_new_appointment"
+)
+def ui_family_new_appointment(
+    request: Request,
+    current_user: User = Depends(require_roles(Role.FAMILY)),
+    db: Session = Depends(get_db),
+):
+    # Get students for this family
+    students = db.query(Student).filter(
+        Student.guardian_user_id == current_user.id
+    ).all()
+    
+    # Get available professionals and their services
+    professionals = db.query(Professional).filter(
+        Professional.is_active == True
+    ).all()
+    
+    # Create a list of services from professionals
+    services = []
+    for prof in professionals:
+        if prof.speciality and prof.speciality not in services:
+            services.append(prof.speciality)
+    
+    # Format professionals for dropdown
+    professional_options = [
+        {
+            "id": prof.id,
+            "name": f"{prof.name} ({prof.speciality})" if prof.speciality else prof.name
+        }
+        for prof in professionals
+    ]
+    
+    context = {
+        "current_user": current_user,
+        "students": students,
+        "professionals": professional_options,
+        "services": [{"id": s, "name": s} for s in services] if services else [],
+    }
+    
+    return render(request, "pages/family/appointment_new.html", context)
+
+
+# GET AVAILABLE SLOTS FOR A PROFESSIONAL ON A DATE
+@router.get("/family/appointments/slots", response_class=HTMLResponse)
+def ui_family_appointment_slots(
+    professional_id: int,
+    date: str,  # Now accepts DD/MM/YYYY format
+    db: Session = Depends(get_db),
+):
+    """Get available time slots for a professional on a specific date"""
+    try:
+        print(f"Loading slots for professional_id={professional_id}, date={date}")
+        
+        from datetime import date as date_type
+        from zoneinfo import ZoneInfo
+        from app.api.v1.slots import get_slots_local
+        
+        # Parse DD/MM/YYYY format
+        day, month, year = map(int, date.split('/'))
+        date_obj = date_type(year, month, day)
+        tz_local = "America/Sao_Paulo"
+        
+        print(f"Parsed date object: {date_obj}")
+        
+        # Get available slots
+        slots_response = get_slots_local(
+            professional_id=professional_id,
+            date_local=date_obj,
+            slot_minutes=60,  # 1 hour slots
+            tz_local=tz_local,
+            db=db
+        )
+        
+        print(f"Slots response: {slots_response}")
+        
+        # Return just the time slots as JSON
+        return JSONResponse(content={
+            "slots": slots_response["slots"],
+            "slots_iso": slots_response["slots_iso"]
+        })
+        
+    except ValueError as e:
+        print(f"ValueError parsing date: {e}")
+        return JSONResponse(content={"slots": [], "error": "Formato de data inválido"}, status_code=400)
+    except Exception as e:
+        print(f"Error loading slots: {e}")
+        return JSONResponse(content={"slots": [], "error": str(e)}, status_code=400)
+
+
+# CREATE APPOINTMENT ACTION
+@router.post(
+    "/family/appointments", 
+    response_class=HTMLResponse, 
+    name="family_create_appointment"
+)
+def ui_family_create_appointment(
+    request: Request,
+    student_id: int = Form(...),
+    professional_id: int = Form(...),
+    service: str = Form(...),
+    date: str = Form(...),  # Now accepts DD/MM/YYYY format
+    time: str = Form(...),
+    location: str = Form(None),
+    current_user: User = Depends(require_roles(Role.FAMILY)),
+    db: Session = Depends(get_db),
+):
+    try:
+        # Validate that the student belongs to this family
+        student = db.query(Student).filter(
+            Student.id == student_id,
+            Student.guardian_user_id == current_user.id
+        ).one_or_none()
+        
+        if not student:
+            raise HTTPException(400, "Aluno não encontrado ou não pertence a esta família")
+        
+        # Validate that the professional exists and is active
+        professional = db.query(Professional).filter(
+            Professional.id == professional_id,
+            Professional.is_active == True
+        ).one_or_none()
+        
+        if not professional:
+            raise HTTPException(400, "Profissional não encontrado ou inativo")
+        
+        # Parse date (DD/MM/YYYY format) and time
+        tz = ZoneInfo("America/Sao_Paulo")
+        try:
+            # Parse DD/MM/YYYY format
+            day, month, year = map(int, date.split('/'))
+            appointment_date = date(year, month, day)
+            appointment_time = datetime.strptime(time, "%H:%M").time()
+            start_datetime_local = datetime.combine(appointment_date, appointment_time, tzinfo=tz)
+            start_datetime_utc = start_datetime_local.astimezone(UTC)
+            
+            # End time (assume 1 hour duration)
+            end_datetime_local = start_datetime_local + timedelta(hours=1)
+            end_datetime_utc = start_datetime_utc + timedelta(hours=1)
+        except ValueError:
+            raise HTTPException(400, "Data ou hora inválida")
+        
+        # Check for conflicts (optional - you might want to implement this)
+        # For now, we'll just create the appointment
+        
+        # Create the appointment
+        appointment = Appointment(
+            student_id=student_id,
+            professional_id=professional_id,
+            service=service,
+            location=location,
+            starts_at=start_datetime_utc,
+            ends_at=end_datetime_utc,
+            status=AppointmentStatus.SCHEDULED,
+        )
+        
+        db.add(appointment)
+        db.commit()
+        db.refresh(appointment)
+        
+        # Redirect to appointment details or list
+        return RedirectResponse(
+            url=f"/family/appointments/{appointment.id}", 
+            status_code=303
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        # Return to form with error
+        # Get data again for the form
+        students = db.query(Student).filter(
+            Student.guardian_user_id == current_user.id
+        ).all()
+        
+        professionals = db.query(Professional).filter(
+            Professional.is_active == True
+        ).all()
+        
+        professional_options = [
+            {
+                "id": prof.id,
+                "name": f"{prof.name} ({prof.speciality})" if prof.speciality else prof.name
+            }
+            for prof in professionals
+        ]
+        
+        services = []
+        for prof in professionals:
+            if prof.speciality and prof.speciality not in services:
+                services.append(prof.speciality)
+        
+        context = {
+            "current_user": current_user,
+            "students": students,
+            "professionals": professional_options,
+            "services": [{"id": s, "name": s} for s in services] if services else [],
+            "error": "Erro ao criar agendamento. Por favor, tente novamente.",
+            "form_data": {
+                "student_id": student_id,
+                "professional_id": professional_id,
+                "service": service,
+                "date": date,
+                "time": time,
+                "location": location,
+            }
+        }
+        
+        return render(request, "pages/family/appointment_new.html", context)
 
 
 # DETALHE
@@ -383,9 +602,6 @@ def ui_family_dashboard(
 
 
 # ---------------------------
-# Family Appointments Route
-# ---------------------------
-
 # Helper functions (duplicates from ui.py, but we'll keep them here for now)
 def _ensure_tz(tz_local: str):
     try:
@@ -503,12 +719,7 @@ def _build_url(base: str, params: dict) -> str:
     return f"{base}?{qs}" if qs else base
 
 
-def _fmt_local(dtval: datetime | None, tz):
-    if not isinstance(dtval, datetime):
-        return "-"
-    if dtval.tzinfo is None:
-        dtval = dtval.replace(tzinfo=UTC)
-    return dtval.astimezone(tz).strftime("%d/%m/%Y %H:%M")
+    return dt.astimezone(tz).strftime("%d/%m/%Y %H:%M")
 
 
 @router.get("/family/appointments")

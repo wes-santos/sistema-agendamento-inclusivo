@@ -17,6 +17,25 @@
   padding-bottom: 0.5rem;
 }
 
+/* Grid de filtros */
+.page-family-appointments .filters-grid,
+.family-appointments .filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  align-items: end;
+}
+
+/* Ações dos filtros */
+.page-family-appointments .filters-actions,
+.family-appointments .filters-actions {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+}
+
 /* Ajustes de tabela nesta tela */
 .page-family-appointments .table .col-status,
 .family-appointments .table .col-status {
@@ -49,4 +68,69 @@
 .page-family-appointments .table__empty,
 .family-appointments .table__empty {
   padding: 1.4rem 0;
+}
+
+/* Form grid for new appointment */
+.page-family-appointment-new .form-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 600px) {
+  .page-family-appointment-new .form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.page-family-appointment-new .form-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.page-family-appointment-new .form-actions .btn {
+  min-width: 120px;
+}
+
+/* Form sections for new appointment */
+.page-family-appointment-new .form-section {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+}
+
+.page-family-appointment-new .form-section-title {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+/* Ensure date inputs work properly */
+.page-family-appointment-new input[type="date"],
+.page-family-appointment-new input[type="text"][name="date"] {
+  min-height: 2.5rem;
+  padding: 0.5rem;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Slots status messages */
+.page-family-appointment-new #slots-status {
+  font-size: 0.9rem;
+  min-height: 1.2rem;
+}
+
+/* Responsive layout for form sections */
+@media (min-width: 900px) {
+  .page-family-appointment-new .form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }

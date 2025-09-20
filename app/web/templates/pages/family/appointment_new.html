@@ -1,0 +1,119 @@
+{# web/templates/pages/family/appointment_new.html #}
+{% extends "_base/base.html" %}
+{% set body_class = 'page-family page-family-appointment-new' %}
+
+{% from "components/card.html" import card %}
+{% from "components/form_field.html" import input_text, select %}
+
+{% block title %}Novo agendamento — Família{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/20-pages/family.css') }}?v={{ app_version|default('1') }}">
+<link rel="stylesheet" href="{{ url_for('static', path='css/20-pages/family-appointments.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+
+{# Breadcrumbs #}
+{% set breadcrumbs = [
+{'label': 'Início', 'href': '/family/dashboard'},
+{'label': 'Meus agendamentos', 'href': '/family/appointments'},
+{'label': 'Novo agendamento'}
+] %}
+{% include "_partials/breadcrumbs.html" %}
+
+{% if error %}
+<div class="alert alert--error" role="alert">
+    <strong>Erro:</strong> {{ error }}
+</div>
+{% endif %}
+
+{% call card(title="Novo agendamento") %}
+<form method="post" action="/family/appointments" class="form" id="appointment-form">
+  <div class="form-grid">
+    <div class="form-section">
+      <h3 class="form-section-title">Informações básicas</h3>
+      
+      {{ select(
+        name="student_id",
+        label="Aluno",
+        options=students,
+        option_value="id",
+        option_label="name",
+        value=(form_data.student_id if form_data is defined else ''),
+        required=True
+      ) }}
+      
+      {{ select(
+        name="professional_id",
+        label="Profissional e Serviço",
+        options=professionals,
+        option_value="id",
+        option_label="name",
+        value=(form_data.professional_id if form_data is defined else ''),
+        required=True
+      ) }}
+      
+      <!-- Hidden field for service that will be populated by JavaScript -->
+      <input type="hidden" id="service" name="service" value="">
+    </div>
+    
+    <div class="form-section">
+      <h3 class="form-section-title">Data e horário</h3>
+      
+      <div class="field">
+        <label class="field__label" for="date">Data</label>
+        <div class="field__control">
+          <input class="input" id="date" name="date" type="text" 
+                 value="{{ form_data.date if form_data is defined else '' }}" 
+                 required
+                 placeholder="Ex: 23/09/2025">
+          <div class="field__hint text-muted">Digite a data no formato DD/MM/AAAA</div>
+        </div>
+      </div>
+      
+      <div class="field">
+        <div class="field__control">
+          <button type="button" id="load-slots-btn" class="btn btn--secondary">
+            Buscar horários disponíveis
+          </button>
+          <div id="slots-status" class="field__hint text-muted" style="margin-top: 0.5rem;"></div>
+        </div>
+      </div>
+      
+      <div class="field">
+        <label class="field__label" for="time">Horário disponível</label>
+        <div class="field__control">
+          <select id="time" name="time" class="select" required disabled>
+            <option value="">Informe a data e clique em "Buscar horários"</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
+    <div class="form-section">
+      <h3 class="form-section-title">Local</h3>
+      
+      <div class="field">
+        <label class="field__label" for="location">Local</label>
+        <div class="field__control">
+          <select id="location" name="location" class="select" disabled>
+            <option value="">Selecione um profissional primeiro</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="form-actions">
+    <button type="submit" class="btn btn--primary">Agendar</button>
+    <a href="/family/appointments" class="btn btn--ghost">Cancelar</a>
+  </div>
+</form>
+{% endcall %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/pages/family-appointment-new.js') }}?v={{ app_version|default('1') }}" defer></script>
+{% endblock %}

@@ -17,10 +17,10 @@
 {% endblock %}
 
 {% block actions %}
-{# Espaço para botões de topo (ex.: “Agendar novo” quando existir o fluxo público) #}
-{# <div class="section--tight">
-    <a class="btn" href="/public/appointments/start">Novo agendamento</a>
-</div> #}
+{# Espaço para botões de topo #}
+<div class="section--tight">
+    <a class="btn" href="/family/appointments/new">Novo agendamento</a>
+</div>
 {% endblock %}
 
 {% block content %}
@@ -35,7 +35,7 @@
 {# FILTROS (GET) #}
 <div class="filters-sticky">
     <form class="filters-bar" method="get" action="/family/appointments">
-        <div class="filters-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;align-items:end;">
+        <div class="filters-grid">
             {{ select(
                 name="service_id",
                 label="Serviço",
@@ -69,15 +69,12 @@
             ) }}
         </div>
 
-        <div class="field" style="margin-top:0.5rem;">
-            <label class="field__label">&nbsp;</label>
-            <div class="field__control hstack gap-2" style="justify-content:flex-end;">
-                <button class="btn" type="submit">Aplicar filtros</button>
-                <a class="btn btn--ghost" href="/family/appointments">Limpar</a>
-            </div>
+        <div class="filters-actions">
+            <button class="btn" type="submit">Aplicar filtros</button>
+            <a class="btn btn--ghost" href="/family/appointments">Limpar</a>
         </div>
     </form>
-    </div>
+</div>
 
 {# PREPARO DAS COLUNAS #}
 {% set columns = [
