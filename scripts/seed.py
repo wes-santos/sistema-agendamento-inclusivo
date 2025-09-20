@@ -7,8 +7,9 @@ import zoneinfo
 from collections.abc import Iterable
 from datetime import UTC, datetime, time, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import ProgrammingError
 
 # --- Ajuste conforme seu projeto ---
 # get_db é um generator do FastAPI; aqui usamos next(get_db()) pra obter uma Session
@@ -71,7 +72,9 @@ def _business_days(start_utc: datetime, n_days: int) -> Iterable[datetime]:
     count = 0
     while count < n_days:
         if d.weekday() < 5:  # 0=Mon ... 6=Sun
-            yield datetime(d.year, d.month, d.day, tzinfo=BR_TZ).astimezone(UTC)
+            # Create datetime in BR_TZ and convert to UTC
+            dt_br = datetime(d.year, d.month, d.day, tzinfo=BR_TZ)
+            yield dt_br.astimezone(UTC)
         d += timedelta(days=1)
         count += 1
 
@@ -111,7 +114,7 @@ def ensure_coordination_user(db: Session) -> User:
 def ensure_professionals(db: Session) -> list[Professional]:
     professionals = []
     for i, prof_data in enumerate(PROFESSIONALS_DATA):
-        email = f"prof{i+1}@example.com"
+        email = f"prof{i + 1}@example.com"
         user = ensure_user(
             db,
             name=prof_data["name"],
@@ -135,8 +138,16 @@ def ensure_professionals(db: Session) -> list[Professional]:
             db.commit()
             db.refresh(professional)
             print(f"[Seed] Professional criado: {professional.name}")
+        elif professional.name != prof_data["name"] or professional.speciality != prof_data["speciality"]:
+            # Update professional info if it changed
+            professional.name = prof_data["name"]
+            professional.speciality = prof_data["speciality"]
+            db.commit()
+            db.refresh(professional)
+            print(f"[Seed] Professional atualizado: {professional.name}")
         professionals.append(professional)
     return professionals
+
 
 def ensure_availability(db: Session, professionals: list[Professional]):
     # Ex: Seg/Qua/Sex das 9h às 12h, Ter/Qui das 14h às 17h (horário de Brasília)
@@ -152,17 +163,20 @@ def ensure_availability(db: Session, professionals: list[Professional]):
 
     for prof in professionals:
         for weekday, start_br, end_br in availability_slots:
-            # Converte para UTC
-            start_utc = (
-                datetime.combine(datetime.today().date(), start_br, tzinfo=BR_TZ)
-                .astimezone(UTC)
-                .time()
-            )
-            end_utc = (
-                datetime.combine(datetime.today().date(), end_br, tzinfo=BR_TZ)
-                .astimezone(UTC)
-                .time()
-            )
+            # Create datetime objects with BR_TZ and convert to UTC
+            today = datetime.now(BR_TZ).date()
+            # Find the most recent date for this weekday
+            days_ahead = weekday - today.weekday()
+            if days_ahead <= 0:  # Target day already happened this week
+                days_ahead += 7
+            target_date = today + timedelta(days_ahead)
+            
+            # Create datetime in BR_TZ and convert to UTC
+            start_dt_br = datetime.combine(target_date, start_br, tzinfo=BR_TZ)
+            end_dt_br = datetime.combine(target_date, end_br, tzinfo=BR_TZ)
+            
+            start_utc = start_dt_br.astimezone(UTC).time()
+            end_utc = end_dt_br.astimezone(UTC).time()
 
             existing = db.execute(
                 select(Availability).where(
@@ -189,7 +203,7 @@ def ensure_students_with_guardians(db: Session) -> list[Student]:
     for i, (guardian_name, student_name) in enumerate(
         zip(GUARDIANS_DATA, STUDENTS_DATA)
     ):
-        email = f"family{i+1}@example.com"
+        email = f"family{i + 1}@example.com"
         user = ensure_user(
             db,
             name=guardian_name,
@@ -265,7 +279,9 @@ def ensure_appointments(
                         service=prof.speciality or "Atendimento",
                         status=status,
                         confirmed_at=(
-                            _now_utc() if status == AppointmentStatus.CONFIRMED else None
+                            _now_utc()
+                            if status == AppointmentStatus.CONFIRMED
+                            else None
                         ),
                         cancellation_reason=(
                             "Cancelado via seed"
@@ -279,34 +295,72 @@ def ensure_appointments(
     print(f"[Seed] {total_appointments} agendamentos criados.")
 
 
+def check_tables_exist(db: Session) -> bool:
+    """Check if all required tables exist in the database."""
+    required_tables = ["users", "professionals", "students", "availability", "appointments"]
+    
+    try:
+        for table in required_tables:
+            db.execute(text(f"SELECT 1 FROM {table} LIMIT 1"))
+        return True
+    except ProgrammingError as e:
+        if "does not exist" in str(e):
+            return False
+        else:
+            raise
+    except Exception:
+        # Any other exception means tables might exist but are empty
+        return True
+
+
 def main():
     print("[Seed] Iniciando seed do banco de dados...")
-    db = get_session()
+    db = None
+    try:
+        db = get_session()
+        
+        # Check if tables exist
+        if not check_tables_exist(db):
+            print("[Seed] Erro: As tabelas do banco de dados ainda não foram criadas.")
+            print("[Seed] Instruções para resolver:")
+            print("  1. Certifique-se de que o container do banco de dados está em execução:")
+            print("     make up")
+            print("  2. Execute as migrações do banco de dados:")
+            print("     make migrate")
+            print("  3. Depois execute o seed novamente:")
+            print("     make seed")
+            return
 
-    # 1. Usuário de Coordenação
-    ensure_coordination_user(db)
+        # 1. Usuário de Coordenação
+        ensure_coordination_user(db)
 
-    # 2. Profissionais e seus usuários
-    professionals = ensure_professionals(db)
+        # 2. Profissionais e seus usuários
+        professionals = ensure_professionals(db)
 
-    # 3. Disponibilidade dos profissionais
-    ensure_availability(db, professionals)
+        # 3. Disponibilidade dos profissionais
+        ensure_availability(db, professionals)
 
-    # 4. Responsáveis e Alunos
-    students = ensure_students_with_guardians(db)
+        # 4. Responsáveis e Alunos
+        students = ensure_students_with_guardians(db)
 
-    # 5. Agendamentos
-    ensure_appointments(db, professionals, students, SEED_BUSINESS_DAYS)
+        # 5. Agendamentos
+        ensure_appointments(db, professionals, students, SEED_BUSINESS_DAYS)
 
-    print("\n[Seed] Concluído!")
-    print("-------------------------------------------------")
-    print("Usuários criados (senha padrão: 'secret'):")
-    print("- coordenacao@example.com (Coordenação)")
-    for i in range(len(PROFESSIONALS_DATA)):
-        print(f"- prof{i+1}@example.com (Profissional)")
-    for i in range(len(GUARDIANS_DATA)):
-        print(f"- family{i+1}@example.com (Família)")
-    print("-------------------------------------------------")
+        print("\n[Seed] Concluído!")
+        print("-------------------------------------------------")
+        print("Usuários criados (senha padrão: 'secret'):")
+        print("- coordenacao@example.com (Coordenação)")
+        for i in range(len(PROFESSIONALS_DATA)):
+            print(f"- prof{i + 1}@example.com (Profissional)")
+        for i in range(len(GUARDIANS_DATA)):
+            print(f"- family{i + 1}@example.com (Família)")
+        print("-------------------------------------------------")
+    except Exception as e:
+        print(f"[Seed] Erro durante o seed: {e}")
+        raise
+    finally:
+        if db:
+            db.close()
 
 
 if __name__ == "__main__":
