@@ -4,6 +4,7 @@ from __future__ import annotations
 from calendar import monthrange
 from collections.abc import Iterable
 from datetime import UTC, date, datetime, time, timedelta
+import csv
 from io import StringIO
 from typing import Annotated, Any
 from urllib.parse import urlencode
@@ -11,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response
-from sqlalchemy import and_, case, func, or_
+from sqlalchemy import and_, case, func, literal_column, or_
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -519,12 +520,14 @@ def export_coordination_reports_csv(
 
     # Agrupar conforme group_by
     buf = StringIO()
-    buf.write("label,scheduled,confirmed,attended,canceled,no_show\\n")
+    writer = csv.writer(buf)
+    writer.writerow(["label", "scheduled", "confirmed", "attended", "canceled", "no_show"])
 
     if group_by == "day":
+        label_expr = func.date_trunc(literal_column("'day'"), Appointment.starts_at)
         day_query = (
             db.query(
-                func.date_trunc("day", Appointment.starts_at).label("label"),
+                label_expr.label("label"),
                 func.sum(case((Appointment.status == AppointmentStatus.SCHEDULED, 1), else_=0)).label(
                     "scheduled"
                 ),
@@ -540,7 +543,7 @@ def export_coordination_reports_csv(
             )
             .filter(Appointment.starts_at >= start_dt, Appointment.starts_at <= end_dt)
         )
-        
+
         # Apply filters to the day query
         if service_id:
             day_query = day_query.filter(Appointment.service == service_id)
@@ -561,12 +564,21 @@ def export_coordination_reports_csv(
                 day_query = day_query.filter(Appointment.status == AppointmentStatus.CANCELLED)
             elif st in ("attended", "done", "past"):
                 day_query = day_query.filter(Appointment.status == AppointmentStatus.DONE)
-        
-        rows = day_query.group_by(func.date_trunc("day", Appointment.starts_at)).order_by(func.date_trunc("day", Appointment.starts_at)).all()
+
+        rows = (
+            day_query.group_by(label_expr).order_by(label_expr).all()
+        )
         for r in rows:
             label = r.label.astimezone(tz).date().isoformat()
-            buf.write(
-                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\\n"
+            writer.writerow(
+                [
+                    label,
+                    int(r.scheduled or 0),
+                    int(r.confirmed or 0),
+                    int(r.attended or 0),
+                    int(r.canceled or 0),
+                    0,
+                ]
             )
     elif group_by == "service":
         service_query = (
@@ -610,8 +622,15 @@ def export_coordination_reports_csv(
         rows = service_query.group_by(Appointment.service).order_by(Appointment.service).all()
         for r in rows:
             label = r.label or "(sem descrição)"
-            buf.write(
-                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\\n"
+            writer.writerow(
+                [
+                    label,
+                    int(r.scheduled or 0),
+                    int(r.confirmed or 0),
+                    int(r.attended or 0),
+                    int(r.canceled or 0),
+                    0,
+                ]
             )
     else:  # professional
         professional_query = (
@@ -651,8 +670,15 @@ def export_coordination_reports_csv(
         rows = professional_query.group_by(Professional.name).order_by(Professional.name).all()
         for r in rows:
             label = r.label or "(Profissional)"
-            buf.write(
-                f"{label},{int(r.scheduled or 0)},{int(r.confirmed or 0)},{int(r.attended or 0)},{int(r.canceled or 0)},0\\n"
+            writer.writerow(
+                [
+                    label,
+                    int(r.scheduled or 0),
+                    int(r.confirmed or 0),
+                    int(r.attended or 0),
+                    int(r.canceled or 0),
+                    0,
+                ]
             )
 
     filename = f'reports_{group_by}_{df.strftime("%Y%m%d")}_{dt.strftime("%Y%m%d")}.csv'
