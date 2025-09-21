@@ -29,12 +29,14 @@
 
 {%- macro input_text(name, label=None, value=None, type='text',
 placeholder=None, required=False, disabled=False,
-autocomplete=None, help_text=None, error=None) -%}
+autocomplete=None, help_text=None, error=None,
+pattern=None, inputmode=None) -%}
 {% call field_wrapper(name, label, required, help_text, error) %}
 <input class="input {{ 'is-invalid' if error else '' }}" id="{{ name }}" name="{{ name }}" type="{{ type }}"
     value="{{ value if value is not none else '' }}" {% if placeholder %}placeholder="{{ placeholder }}" {% endif %} {%
     if required %}required{% endif %} {% if disabled %}disabled{% endif %} {% if autocomplete
-    %}autocomplete="{{ autocomplete }}" {% endif %}>
+    %}autocomplete="{{ autocomplete }}" {% endif %} {% if pattern %}pattern="{{ pattern }}" {% endif %} {% if inputmode
+    %}inputmode="{{ inputmode }}" {% endif %}>
 {% endcall %}
 {%- endmacro %}
 

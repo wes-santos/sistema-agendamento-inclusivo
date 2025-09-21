@@ -37,6 +37,17 @@ def fmt_hm(t: time) -> str:
     return f"{t.hour:02d}:{t.minute:02d}"
 
 
+def parse_date_filter(raw: str | None) -> date | None:
+    if not raw:
+        return None
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(raw, fmt).date()
+        except Exception:
+            continue
+    return None
+
+
 def start_of_week(d: date) -> date:
     """Segunda-feira da semana do dia d."""
     return d - timedelta(days=(d.weekday()))  # weekday(): Mon=0 .. Sun=6
@@ -427,20 +438,8 @@ def _render_professional_reports(
 
     # Dates (defaults = current month)
     today = date.today()
-    if not date_from:
-        df = today.replace(day=1)
-    else:
-        try:
-            df = date.fromisoformat(date_from)
-        except Exception:
-            df = today.replace(day=1)
-    if not date_to:
-        dt = today
-    else:
-        try:
-            dt = date.fromisoformat(date_to)
-        except Exception:
-            dt = today
+    df = parse_date_filter(date_from) or today.replace(day=1)
+    dt = parse_date_filter(date_to) or today
 
     start_dt = datetime.combine(df, time.min, tzinfo=tz).astimezone(UTC)
     end_dt = datetime.combine(dt, time.max, tzinfo=tz).astimezone(UTC)
@@ -550,8 +549,8 @@ def _render_professional_reports(
     ctx = {
         "current_user": current_user,
         "filters": {
-            "date_from": df.strftime("%Y-%m-%d"),  # Formato ISO para campos date do HTML
-            "date_to": dt.strftime("%Y-%m-%d"),    # Formato ISO para campos date do HTML
+            "date_from": df.strftime("%d/%m/%Y"),
+            "date_to": dt.strftime("%d/%m/%Y"),
             "group_by": group_by,
         },
         "kpis": kpis,

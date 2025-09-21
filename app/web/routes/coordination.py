@@ -33,6 +33,11 @@ PT_WEEKDAYS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
 def parse_iso(d: str | None) -> date | None:
     if not d:
         return None
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(d, fmt).date()
+        except Exception:
+            continue
     try:
         return date.fromisoformat(d)
     except Exception:
@@ -411,8 +416,8 @@ def _render_coordination_reports(
 
     persist_query = urlencode(
         {
-            "date_from": date_from.isoformat(),
-            "date_to": date_to.isoformat(),
+            "date_from": date_from.strftime("%d/%m/%Y"),
+            "date_to": date_to.strftime("%d/%m/%Y"),
             "group_by": group_by,
             "service_id": service_id or "",
             "professional_id": professional_id or "",
@@ -423,8 +428,8 @@ def _render_coordination_reports(
     ctx = {
         "current_user": current_user,
         "filters": {
-            "date_from": date_from.strftime("%Y-%m-%d"),  # Formato ISO para campos date do HTML
-            "date_to": date_to.strftime("%Y-%m-%d"),      # Formato ISO para campos date do HTML
+            "date_from": date_from.strftime("%d/%m/%Y"),
+            "date_to": date_to.strftime("%d/%m/%Y"),
             "group_by": group_by,
             "service_id": service_id or "",
             "professional_id": professional_id or "",

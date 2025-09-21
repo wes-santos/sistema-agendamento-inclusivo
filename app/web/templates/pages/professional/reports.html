@@ -20,8 +20,26 @@
 
 <section class="reports-filters">
   <form method="get" action="/professional/reports" class="hstack gap-2" role="search">
-    {{ input_text(name="date_from", type="date", label="De", value=(filters.date_from if filters is defined else '')) }}
-    {{ input_text(name="date_to", type="date", label="Até", value=(filters.date_to if filters is defined else '')) }}
+    {{ input_text(
+      name="date_from",
+      type="text",
+      label="De",
+      value=(filters.date_from if filters is defined else ''),
+      placeholder="dd/mm/aaaa",
+      inputmode="numeric",
+      pattern="\\d{2}/\\d{2}/\\d{4}",
+      autocomplete="off"
+    ) }}
+    {{ input_text(
+      name="date_to",
+      type="text",
+      label="Até",
+      value=(filters.date_to if filters is defined else ''),
+      placeholder="dd/mm/aaaa",
+      inputmode="numeric",
+      pattern="\\d{2}/\\d{2}/\\d{4}",
+      autocomplete="off"
+    ) }}
     {{ select(name="group_by", label="Agrupar por",
       options=[{'value':'day','label':'Dia'},{'value':'service','label':'Serviço'}],
       value=(filters.group_by if filters is defined else 'day')
@@ -66,4 +84,3 @@
 {{ table(columns=columns, rows=rows|default([]), caption="Relatório", empty_message="Sem dados no período.", compact=True, responsive=True, striped=True, hover=True) }}
 
 {% endblock %}
-
