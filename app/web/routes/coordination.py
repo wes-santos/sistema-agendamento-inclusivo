@@ -324,6 +324,7 @@ def _render_coordination_reports(
                 "confirmed": int(rec.confirmed or 0),
                 "attended": int(rec.attended or 0),
                 "canceled": int(rec.canceled or 0),
+                "no_show": 0,
             }
             for rec in day_query
         ]
@@ -359,6 +360,7 @@ def _render_coordination_reports(
                 "confirmed": int(rec.confirmed or 0),
                 "attended": int(rec.attended or 0),
                 "canceled": int(rec.canceled or 0),
+                "no_show": 0,
             }
             for rec in svc_query
         ]
@@ -395,6 +397,7 @@ def _render_coordination_reports(
                 "confirmed": int(rec.confirmed or 0),
                 "attended": int(rec.attended or 0),
                 "canceled": int(rec.canceled or 0),
+                "no_show": 0,
             }
             for rec in prof_query
         ]
