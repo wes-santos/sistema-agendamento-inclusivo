@@ -1,0 +1,159 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-auth page-auth-register' %}
+
+{% from "components/card.html" import card %}
+{% from "components/form_field.html" import input_text, select %}
+
+{% block title %}Criar conta{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/20-pages/auth.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+<section class="auth-wrap">
+  {% call card(title="Cadastre-se", subtitle="Crie sua conta para acessar o sistema") %}
+  <form method="post" action="{{ url_for('auth_register_post') }}" class="auth-form" id="register-form" novalidate>
+    <input type="hidden" name="lgpd_consent" id="lgpd-consent" value="{{ 'accepted' if form.lgpd_consent == 'accepted' else '' }}">
+    {{ input_text(
+      name="name",
+      label="Nome completo",
+      value=form.name,
+      required=True,
+      autocomplete="name",
+      error=errors.get('name')
+    ) }}
+
+    {{ input_text(
+      name="email",
+      type="email",
+      label="E-mail",
+      value=form.email,
+      required=True,
+      autocomplete="email",
+      error=errors.get('email')
+    ) }}
+
+    {{ select(
+      name="role",
+      label="Perfil",
+      options=role_options,
+      value=form.role,
+      required=True,
+      help_text="Disponível apenas para responsáveis (família) ou profissionais.",
+      error=errors.get('role')
+    ) }}
+
+    {{ input_text(
+      name="specialty",
+      label="Área de atuação (opcional)",
+      value=form.specialty,
+      help_text="Informe caso esteja se cadastrando como profissional.",
+      error=errors.get('specialty')
+    ) }}
+
+    {{ input_text(
+      name="password",
+      type="password",
+      label="Senha",
+      required=True,
+      autocomplete="new-password",
+      help_text="Mínimo 8 caracteres, incluindo maiúsculas, minúsculas, número e símbolo.",
+      error=errors.get('password')
+    ) }}
+
+    {{ input_text(
+      name="password_confirm",
+      type="password",
+      label="Confirme a senha",
+      required=True,
+      autocomplete="new-password",
+      error=errors.get('password_confirm')
+    ) }}
+
+    <p class="auth-note text-muted">
+      Ao criar sua conta você declara estar de acordo com o uso dos seus dados conforme a LGPD.&nbsp;
+      <a href="#" id="open-lgpd-modal">Ler termos de privacidade</a>.
+    </p>
+    {% if errors.lgpd_consent %}
+    <div class="alert alert--warning" role="alert">{{ errors.lgpd_consent }}</div>
+    {% endif %}
+
+    <div class="auth-actions">
+      <button class="btn" type="submit">Criar conta</button>
+      <a class="btn btn--ghost" href="{{ url_for('auth_login_get') }}">Voltar</a>
+    </div>
+  </form>
+  {% endcall %}
+</section>
+
+<dialog id="lgpd-consent-modal" class="modal" data-modal>
+  <form method="dialog" class="modal__box" data-modal-box>
+    <header class="modal__header">
+      <h2 class="modal__title">Aviso de privacidade e consentimento LGPD</h2>
+      <button type="submit" class="modal__close" value="cancel" aria-label="Fechar">×</button>
+    </header>
+    <section class="modal__body">
+      <p>Para continuar com o cadastro precisamos do seu consentimento para tratar os dados pessoais informados nesta conta, em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018).</p>
+      <p>Ao aceitar você concorda que:</p>
+      <ul>
+        <li>Os dados fornecidos serão utilizados para criar sua credencial de acesso e operar os serviços de agendamento.</li>
+        <li>Suas informações poderão ser compartilhadas com profissionais autorizados e com a coordenação da instituição para fins exclusivamente acadêmicos e de atendimento.</li>
+        <li>Você poderá solicitar, a qualquer momento, o acesso, a correção ou a exclusão dos seus dados, bem como revogar este consentimento pelos canais oficiais de suporte.</li>
+        <li>Seus dados serão guardados em ambiente seguro, com controles técnicos e administrativos adequados.</li>
+      </ul>
+      <p>Declaramos que não utilizaremos seus dados para fins de marketing nem os repassaremos a terceiros sem nova autorização.</p>
+    </section>
+    <footer class="modal__footer">
+      <button value="cancel" class="btn btn--ghost" type="submit">Não aceitar</button>
+      <button value="accept" class="btn" type="submit">Aceito e desejo continuar</button>
+    </footer>
+  </form>
+</dialog>
+{% endblock %}
+
+{% block extra_js %}
+{{ super() }}
+<script nonce="{{ request.state.csp_nonce|default('') }}">
+  document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('register-form');
+    const consentInput = document.getElementById('lgpd-consent');
+    const modal = document.getElementById('lgpd-consent-modal');
+    const openTrigger = document.getElementById('open-lgpd-modal');
+
+    if (!form || !consentInput || !modal) {
+      return;
+    }
+
+    if (openTrigger) {
+      openTrigger.addEventListener('click', function (event) {
+        event.preventDefault();
+        modal.showModal();
+      });
+    }
+
+    const acceptButton = modal.querySelector('button[value="accept"]');
+    if (acceptButton) {
+      acceptButton.addEventListener('click', function () {
+        consentInput.value = 'accepted';
+      });
+    }
+
+    modal.addEventListener('close', function () {
+      if (modal.returnValue === 'accept' && consentInput.value === 'accepted') {
+        form.requestSubmit();
+      }
+      if (modal.returnValue !== 'accept' && consentInput.value !== 'accepted') {
+        consentInput.value = '';
+      }
+    });
+
+    form.addEventListener('submit', function (event) {
+      if (consentInput.value !== 'accepted') {
+        event.preventDefault();
+        modal.showModal();
+      }
+    });
+  });
+</script>
+{% endblock %}

@@ -4,9 +4,6 @@
 {# ids auxiliares de acessibilidade #}
 {% set hint_id = name ~ '__hint' %}
 {% set err_id = name ~ '__err' %}
-{% set described = [] %}
-{% if help_text %}{% do described.append(hint_id) %}{% endif %}
-{% if error %}{% do described.append(err_id) %}{% endif %}
 
 <div class="field">
     {% if label %}
@@ -30,14 +27,27 @@
 {%- endmacro %}
 
 
-{%- macro input_text(name, label=None, value=None, type='text',
-placeholder=None, required=False, disabled=False,
-autocomplete=None, help_text=None, error=None) -%}
+{%- macro input_text(
+    name,
+    label=None,
+    value=None,
+    type='text',
+    placeholder=None,
+    required=False,
+    disabled=False,
+    autocomplete=None,
+    help_text=None,
+    error=None,
+    pattern=None,
+    inputmode=None,
+    data_mask=None
+) -%}
 {% call field_wrapper(name, label, required, help_text, error) %}
 <input class="input {{ 'is-invalid' if error else '' }}" id="{{ name }}" name="{{ name }}" type="{{ type }}"
     value="{{ value if value is not none else '' }}" {% if placeholder %}placeholder="{{ placeholder }}" {% endif %} {%
     if required %}required{% endif %} {% if disabled %}disabled{% endif %} {% if autocomplete
-    %}autocomplete="{{ autocomplete }}" {% endif %}>
+    %}autocomplete="{{ autocomplete }}" {% endif %} {% if pattern %}pattern="{{ pattern }}" {% endif %} {% if inputmode
+    %}inputmode="{{ inputmode }}" {% endif %} {% if data_mask %}data-mask="{{ data_mask }}" {% endif %}>
 {% endcall %}
 {%- endmacro %}
 
@@ -50,8 +60,8 @@ help_text=None, error=None) -%}
     endif %} {% if disabled %}disabled{% endif %}>
     {% if placeholder %}<option value="">{{ placeholder }}</option>{% endif %}
     {% for opt in options %}
-    {% set ov = opt[option_value] if opt is mapping else attribute(opt, option_value) %}
-    {% set ol = opt[option_label] if opt is mapping else attribute(opt, option_label) %}
+    {% set ov = opt[option_value] if opt is mapping else opt[option_value] %}
+    {% set ol = opt[option_label] if opt is mapping else opt[option_label] %}
     <option value="{{ ov }}" {{ 'selected' if (value|string)==(ov|string) }}>{{ ol }}</option>
     {% endfor %}
 </select>

@@ -19,6 +19,57 @@
   .hstack{display:flex;gap:.5rem;align-items:center}
   .only-desktop{display:none}@media(min-width:768px){.only-desktop{display:flex}}
   .only-mobile{display:flex}@media(min-width:768px){.only-mobile{display:none}}
+  
+  /* Improved appointment details styling */
+  .appointment-header {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  
+  .appointment-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 0.25rem;
+  }
+  
+  .appointment-subtitle {
+    font-size: 1.1rem;
+    color: var(--muted);
+    margin: 0 0 0.5rem;
+  }
+  
+  .appointment-meta {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    font-size: 0.9rem;
+  }
+  
+  .meta-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  
+  .status-section {
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background: var(--surface-1);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+  }
+  
+  .status-label {
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+  }
+  
+  .action-buttons {
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border);
+  }
 </style>
 {% endblock %}
 
@@ -35,30 +86,48 @@
 </div>
 {% endset %}
 
-{% call card(title=appointment.service_name, subtitle=appointment.professional_name, actions_html=header_actions) %}
-<dl class="dl grid-2">
-    <div>
-        <dt>Início</dt>
-        <dd>{{ appointment.starts_at_local }}</dd>
+{% call card() %}
+<div class="appointment-header">
+  <h1 class="appointment-title">{{ appointment.service_name }}</h1>
+  <h2 class="appointment-subtitle">{{ appointment.professional_name }}</h2>
+  
+  <div class="appointment-meta">
+    <div class="meta-item">
+      <span>Início:</span>
+      <strong>{{ appointment.starts_at_local }}</strong>
     </div>
-    {% if appointment.ends_at_local %}<div>
-        <dt>Fim</dt>
-        <dd>{{ appointment.ends_at_local }}</dd>
-    </div>{% endif %}
-    {% if appointment.location %}<div>
-        <dt>Local</dt>
-        <dd>{{ appointment.location }}</dd>
-    </div>{% endif %}
-    <div>
-        <dt>Status</dt>
-        <dd>{{ status_badge(appointment.status) }}</dd>
+    {% if appointment.ends_at_local %}
+    <div class="meta-item">
+      <span>Fim:</span>
+      <strong>{{ appointment.ends_at_local }}</strong>
     </div>
-</dl>
-<div class="mt-4 btnbar only-mobile">
-  <a class="btn btn--ghost" href="/family/dashboard">Voltar ao painel</a>
-  <a class="btn btn--ghost" href="/family/appointments">Voltar aos agendamentos</a>
-  {% if appointment.confirm_url %}<a class="btn btn--success" href="{{ appointment.confirm_url }}">Confirmar presença</a>{% endif %}
-  {% if appointment.cancel_url %}<a class="btn btn--danger" href="{{ appointment.cancel_url }}">Cancelar</a>{% endif %}
+    {% endif %}
+    {% if appointment.location %}
+    <div class="meta-item">
+      <span>Local:</span>
+      <strong>{{ appointment.location }}</strong>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="status-section">
+  <div class="status-label">Status do agendamento</div>
+  <div>{{ status_badge(appointment.status) }}</div>
+</div>
+
+<div class="action-buttons">
+  <div class="btnbar only-mobile">
+    <a class="btn btn--ghost" href="/family/dashboard">Voltar ao painel</a>
+    <a class="btn btn--ghost" href="/family/appointments">Voltar aos agendamentos</a>
+    {% if appointment.confirm_url %}<a class="btn btn--success" href="{{ appointment.confirm_url }}">Confirmar presença</a>{% endif %}
+    {% if appointment.cancel_url %}<a class="btn btn--danger" href="{{ appointment.cancel_url }}">Cancelar</a>{% endif %}
+  </div>
+  
+  <div class="btnbar only-desktop" style="margin-top: 1rem;">
+    {% if appointment.confirm_url %}<a class="btn btn--success" href="{{ appointment.confirm_url }}">Confirmar presença</a>{% endif %}
+    {% if appointment.cancel_url %}<a class="btn btn--danger" href="{{ appointment.cancel_url }}">Cancelar agendamento</a>{% endif %}
+  </div>
 </div>
 {% endcall %}
 {% endblock %}

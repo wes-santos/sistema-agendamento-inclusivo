@@ -16,8 +16,12 @@ class Student(Base):
     guardian_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="RESTRICT"), index=True, nullable=False
     )
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True, unique=True, nullable=True
+    )
 
-    guardian = relationship("User")
+    guardian = relationship("User", foreign_keys=[guardian_user_id])
+    user = relationship("User", foreign_keys=[user_id], back_populates="student_profile")
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: dt.datetime.now(tz=dt.UTC),

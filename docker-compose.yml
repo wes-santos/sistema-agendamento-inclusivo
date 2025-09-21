@@ -3,17 +3,20 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    # Na 1ª vez, garanta deps instaladas; depois fica cacheado no volume venv
-    command: >
-      sh -lc 'poetry install --no-root --with dev && exec poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload'
+    command: 'poetry run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload'
     env_file: .env.dev
     environment:
       TZ: America/Sao_Paulo
+      PYTHONUNBUFFERED: 1
+      PYTHONPATH: /app
+      POETRY_VIRTUALENVS_IN_PROJECT: false
     ports:
       - "8000:8000"
     volumes:
       - ./:/app:rw,delegated
-      - ./.venv:/app/.venv
+      - venv:/opt/venv
+      - pip-cache:/root/.cache/pip
+      - poetry-cache:/root/.cache/pypoetry
     depends_on:
       - db
       - mailhog
@@ -64,11 +67,18 @@ services:
     working_dir: /app
     env_file:
       - .env.dev
+    environment:
+      PYTHONUNBUFFERED: 1
+      PYTHONPATH: /app
+      POETRY_VIRTUALENVS_CREATE: false
+      POETRY_VIRTUALENVS_IN_PROJECT: false
     volumes:
       - ./:/app:rw,delegated
-      - ./.venv:/app/.venv
+      - venv:/opt/venv
+      - pip-cache:/root/.cache/pip
+      - poetry-cache:/root/.cache/pypoetry
     command: >
-      sh -lc 'poetry install --no-root --with dev && while :; do poetry run python -m app.jobs.remind_t24 || true; sleep 60; done'
+      sh -lc 'while :; do poetry run python -m app.jobs.remind_t24 || true; sleep 60; done'
     depends_on:
       - db
       - mailhog
@@ -77,3 +87,7 @@ services:
 volumes:
   pgdata_dev:
   pgadmin_data:
+  venv:
+  pip-cache:
+  poetry-cache:
+

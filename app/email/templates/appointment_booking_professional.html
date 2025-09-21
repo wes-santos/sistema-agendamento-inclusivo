@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt-br">
+  <body style="font-family:system-ui,Segoe UI,Roboto,Arial;line-height:1.4">
+    <h2>Novo agendamento realizado</h2>
+    <p>Olá {{ professional_name }},</p>
+    <p>Um novo agendamento foi realizado para <strong>{{ student_name }}</strong> com você.</p>
+       
+    <h3>Detalhes do agendamento:</h3>
+    <ul>
+      <li><strong>Responsável:</strong> {{ guardian_name }}</li>
+      <li><strong>Aluno:</strong> {{ student_name }}</li>
+      <li><strong>Serviço:</strong> {{ service_name }}</li>
+      <li><strong>Data:</strong> {{ starts_local }}</li>
+      <li><strong>Local:</strong> {{ location }}</li>
+    </ul>
+    
+    <p>Por favor, verifique sua agenda e entre em contato com o responsável caso necessário.</p>
+    
+    <p style="font-size:12px;color:#666">Este é um e-mail automático. Por favor, não responda.</p>
+  </body>
+</html>

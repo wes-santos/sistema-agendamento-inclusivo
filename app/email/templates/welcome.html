@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="pt-BR">
+  <body style="font-family:system-ui,Segoe UI,Roboto,Arial;line-height:1.5;color:#0f172a;background:#f9fafb;padding:24px;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;padding:32px;box-shadow:0 4px 16px rgba(15,23,42,0.08);">
+      <tr>
+        <td>
+          <h1 style="margin:0 0 16px;font-size:24px;color:#155EEF;">Boas-vindas ao Sistema de Agendamentos Inclusivos</h1>
+          <p style="margin:0 0 16px;">Olá {{ name }},</p>
+          <p style="margin:0 0 16px;">
+            Sua conta foi criada com sucesso. A partir de agora você pode acessar o portal utilizando o endereço de e-mail <strong>{{ email }}</strong>.
+          </p>
+          <p style="margin:0 0 24px;">
+            Para entrar, utilize o botão abaixo ou copie o link e abra em seu navegador preferido.
+          </p>
+          <p style="margin:0 0 32px;text-align:center;">
+            <a href="{{ login_url }}" style="display:inline-block;padding:12px 24px;background:#155EEF;color:#ffffff;text-decoration:none;border-radius:8px;font-weight:600;">
+              Acessar o portal
+            </a>
+          </p>
+          <p style="margin:0 0 16px;font-size:14px;color:#475569;">
+            Se você não reconhece este cadastro, ignore este e-mail ou entre em contato com a coordenação para que possamos ajudar.
+          </p>
+          <p style="margin:0;font-size:14px;color:#475569;">
+            Obrigado,<br>
+            Equipe do Sistema de Agendamentos Inclusivos
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

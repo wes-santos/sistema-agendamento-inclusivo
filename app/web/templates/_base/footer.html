@@ -1,9 +1,12 @@
 <footer class="footer" role="contentinfo">
     <div class="container footer__inner">
-        <p class="footer__copy">
-            &copy; {{ now().year if now is defined else 2025 }} — Sistema de Agendamentos
-            {% if app_version is defined %} • v{{ app_version }}{% endif %}
-        </p>
+        <div class="footer__copy">
+            <p>
+                &copy; {{ now().year if now is defined else 2025 }} — Sistema de Agendamentos
+                {% if app_version is defined %} • v{{ app_version }}{% endif %}
+            </p>
+            <a class="footer__link" href="{{ url_for('lgpd_consent') }}">Termo de consentimento LGPD</a>
+        </div>
         {% block footer_extra %}{% endblock %}
     </div>
 </footer>

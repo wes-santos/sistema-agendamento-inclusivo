@@ -13,6 +13,7 @@ class Role(str, enum.Enum):
     FAMILY = "FAMILY"
     PROFESSIONAL = "PROFESSIONAL"
     COORDINATION = "COORDINATION"
+    STUDENT = "STUDENT"
 
 
 class User(Base):
@@ -40,3 +41,9 @@ class User(Base):
     )
 
     professional = relationship("Professional", back_populates="user", uselist=False)
+    student_profile = relationship(
+        "Student",
+        back_populates="user",
+        uselist=False,
+        foreign_keys="Student.user_id",
+    )

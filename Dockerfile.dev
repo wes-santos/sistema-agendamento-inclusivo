@@ -29,6 +29,8 @@ RUN ln -s /root/.local/bin/poetry /usr/local/bin/poetry
 
 # código (fallback; em dev vamos montar via volume)
 COPY app ./app
+COPY pyproject.toml poetry.lock* ./
+RUN poetry install
 
 EXPOSE 8000
 

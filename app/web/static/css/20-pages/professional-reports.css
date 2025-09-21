@@ -1,0 +1,67 @@
+/* Professional Reports Page */
+
+/* Sticky filters section */
+.page-professional.page-professional-reports .reports-filters {
+  position: sticky;
+  top: calc(var(--nav-height, 56px) + 0.5rem);
+  z-index: 20;
+  background: var(--page);
+  padding-bottom: 0.5rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* KPI Grid - Responsive layout */
+.page-professional.page-professional-reports .kpi-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  margin: 1rem 0;
+}
+
+/* On medium screens, show 2 columns */
+@media (min-width: 600px) {
+  .page-professional.page-professional-reports .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* On large screens, show 4 columns like the dashboard */
+@media (min-width: 820px) {
+  .page-professional.page-professional-reports .kpi-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* KPI Card styling */
+.page-professional.page-professional-reports .kpi {
+  display: grid;
+  gap: 0.2rem;
+  align-content: start;
+  min-height: 84px;
+}
+
+.page-professional.page-professional-reports .kpi__label {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.page-professional.page-professional-reports .kpi__value {
+  font-weight: 800;
+  font-size: 1.35rem;
+}
+
+/* Table styling */
+.page-professional.page-professional-reports .table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.page-professional.page-professional-reports .table__th,
+.page-professional.page-professional-reports .table__td {
+  padding: 0.5rem 0.65rem;
+}
+
+.page-professional.page-professional-reports .col-amount {
+  font-variant-numeric: tabular-nums;
+}

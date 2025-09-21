@@ -1,0 +1,95 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-professional page-professional-availability' %}
+
+{% from "components/card.html" import card %}
+{% from "components/form_field.html" import input_text, select %}
+
+{% block title %}Disponibilidade — Profissional{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/professional.css') }}?v={{ app_version|default('1') }}">
+<link rel="stylesheet"
+    href="{{ url_for('static', path='css/20-pages/professional-availability.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = [{'label':'Profissional','href':'/professional/dashboard'},{'label':'Disponibilidade'}] %}
+{% include "_partials/breadcrumbs.html" %}
+
+<section class="section section--tight">
+    {% set subtitle_text = 'Horários em ' ~ timezone_label %}
+    {% call card(title="Cadastrar disponibilidade", subtitle=subtitle_text) %}
+    <form method="post" action="{{ url_for('professional_availability') }}" class="form" novalidate>
+        <input type="hidden" name="tz_local" value="{{ timezone_label }}">
+        {{ select(
+            name="weekday",
+            label="Dia da semana",
+            options=weekday_options,
+            value=form.weekday,
+            error=errors.get('weekday')
+        ) }}
+        {{ input_text(
+            name="start",
+            type="text",
+            label="Início",
+            value=form.start,
+            placeholder="HH:MM",
+            pattern="^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+            inputmode="numeric",
+            help_text="Formato 24h (HH:MM)",
+            error=errors.get('start'),
+            data_mask="time-hhmm"
+        ) }}
+        {{ input_text(
+            name="end",
+            type="text",
+            label="Fim",
+            value=form.end,
+            placeholder="HH:MM",
+            pattern="^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+            inputmode="numeric",
+            help_text="Formato 24h (HH:MM)",
+            error=errors.get('end'),
+            data_mask="time-hhmm"
+        ) }}
+        <div class="form-actions">
+            <button class="btn" type="submit">Adicionar intervalo</button>
+        </div>
+        {% if errors.get('timezone') %}
+        <p class="text-danger text-sm mt-2">{{ errors.get('timezone') }}</p>
+        {% endif %}
+    </form>
+    {% endcall %}
+</section>
+
+<section class="section availability-list">
+    <div class="availability-grid">
+        {% for day in availability %}
+        {% call card(title=day.weekday_label) %}
+        {% if day.slots %}
+        <ul class="availability-items">
+            {% for slot in day.slots %}
+            <li class="availability-item">
+                <div class="availability-item__time">{{ slot.start_local }} – {{ slot.end_local }}</div>
+                <form method="post" action="{{ url_for('professional_availability_delete') }}" class="availability-item__form" novalidate>
+                    <input type="hidden" name="weekday" value="{{ day.weekday }}">
+                    <input type="hidden" name="start_utc" value="{{ slot.start_utc }}">
+                    <button class="btn btn--ghost btn--sm" type="submit">Remover</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-muted">Sem horários cadastrados.</p>
+        {% endif %}
+        {% endcall %}
+        {% endfor %}
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', path='js/pages/professional-availability.js') }}?v={{ app_version|default('1') }}"
+    defer></script>
+{% endblock %}

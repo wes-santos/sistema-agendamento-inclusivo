@@ -107,10 +107,12 @@
     {# Ações rápidas #}
     {% call card(title="Ações rápidas") %}
     <nav class="quick-actions">
-        <a class="btn btn--block" href="/family/appointments">Ver todos</a>
+        <a class="btn btn--secondary btn--block quick-actions__primary" href="{{ url_for('family_new_appointment') }}">Agendar</a>
+        <a class="btn btn--secondary btn--block quick-actions__primary" href="/family/appointments">Ver todos</a>
         <a class="btn btn--secondary btn--block" href="/family/appointments?status=confirmed">Confirmados</a>
         <a class="btn btn--secondary btn--block" href="/family/appointments?status=past">Histórico</a>
         <a class="btn btn--secondary btn--block" href="/family/appointments?status=canceled">Cancelados</a>
+        <a class="btn btn--ghost btn--block" href="/family/students">Gerenciar alunos</a>
     </nav>
     {% endcall %}
 

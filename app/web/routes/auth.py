@@ -2,19 +2,27 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
+from urllib.parse import quote_plus
 
-from fastapi import APIRouter, Depends, Form, Query, Request, Response, Body
+from fastapi import APIRouter, Body, Depends, Form, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+from app.audit.helpers import record_audit
 from app.db.session import get_db
 from app.models.user import Role, User
+from app.models.professional import Professional
 from app.web.templating import render
 from app.core.settings import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    hash_password,
+    validate_password_policy,
     verify_password,
 )
+from app.email.render import render as render_email
+from app.services.mailer import send_email
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -77,28 +85,6 @@ def authenticate_user(db: Session, email: str, password: str) -> dict | None:
     return {"id": user.id, "name": user.name, "role": user.role}
 
 
-# ===== Auth demo (troque por sua autenticação real) =====
-def _demo_auth(email: str, password: str) -> dict | None:
-    # Permite alguns usuários de brincadeira
-    demo_users = {
-        "familia@demo": {"id": "u1", "name": "Família Demo", "role": Role.FAMILY},
-        "prof@demo": {
-            "id": "u2",
-            "name": "Profissional Demo",
-            "role": Role.PROFESSIONAL,
-        },
-        "coord@demo": {
-            "id": "u3",
-            "name": "Coordenação Demo",
-            "role": Role.COORDINATION,
-        },
-    }
-    if email in demo_users and password == "demo":
-        u = demo_users[email]
-        return {"id": u["id"], "name": u["name"], "role": u["role"]}
-    return None
-
-
 # EXEMPLO de como plugar na sua auth real:
 # def authenticate_user(db: Session, email: str, password: str) -> Optional[dict]:
 #     user = db.query(User).filter(User.email == email).first()
@@ -113,9 +99,25 @@ def _demo_auth(email: str, password: str) -> dict | None:
 def login_get(
     request: Request,
     next: str = Query("/", alias="next"),
-    demo: bool = Query(False),
+    registered: bool = Query(False),
 ):
-    ctx = {"next": next, "form": {"email": "familia@demo" if demo else ""}}
+    flashes: list[dict] = []
+    if registered:
+        flashes.append(
+            {
+                "type": "success",
+                "title": "Cadastro concluído",
+                "message": "Sua conta foi criada. Entre com suas credenciais.",
+            }
+        )
+
+    prefill_email = request.query_params.get("email") or ""
+
+    ctx = {
+        "next": next,
+        "form": {"email": prefill_email},
+        "flashes": flashes,
+    }
     return render(request, "pages/auth/login.html", ctx)
 
 
@@ -126,7 +128,6 @@ def login_post(
     email: str | None = Form(None),
     password: str | None = Form(None),
     next: str = Form("/"),
-    demo: bool = Query(False),
     db: Session = Depends(get_db),
     json_body: dict | None = Body(None),
 ):
@@ -149,10 +150,6 @@ def login_post(
         return render(request, "pages/auth/login.html", ctx)
     # 1) autenticação real (DB)
     user = authenticate_user(db, email, password)
-    # 2) fallback demo (se habilitado via query)
-    if not user and demo:
-        user = _demo_auth(email, password)
-
     if not user:
         ctx = {
             "error": "E-mail ou senha inválidos.",
@@ -180,6 +177,16 @@ def login_post(
     # JWTs
     access = create_access_token(str(user["id"]))
     refresh = create_refresh_token(str(user["id"]))
+
+    record_audit(
+        db,
+        request=request,
+        user_id=user["id"],
+        action="LOGIN",
+        entity="auth",
+        entity_id=user["id"],
+        autocommit=True,
+    )
 
     # If client wants JSON (API usage), return tokens instead of redirect
     accept = (request.headers.get("accept") or "").lower()
@@ -237,8 +244,176 @@ def login_post(
     return redirect
 
 
+def _role_options() -> list[dict[str, str]]:
+    return [
+        {"value": Role.FAMILY.value, "label": "Responsável (Família)"},
+        {"value": Role.PROFESSIONAL.value, "label": "Profissional"},
+    ]
+
+
+@router.get("/register", response_class=HTMLResponse, name="auth_register_get")
+def register_get(request: Request) -> HTMLResponse:
+    ctx = {
+        "role_options": _role_options(),
+        "form": {
+            "name": "",
+            "email": "",
+            "role": Role.FAMILY.value,
+            "specialty": "",
+            "lgpd_consent": "",
+        },
+        "errors": {},
+    }
+    return render(request, "pages/auth/register.html", ctx)
+
+
+@router.get("/lgpd-consent", response_class=HTMLResponse, name="lgpd_consent")
+def lgpd_consent(request: Request) -> HTMLResponse:
+    current = get_current_user_optional(request)
+    return render(
+        request,
+        "pages/public/lgpd_consent.html",
+        {"current_user": current},
+    )
+
+
+@router.post("/register", response_class=HTMLResponse, name="auth_register_post")
+def register_post(
+    request: Request,
+    name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+    role: str = Form(...),
+    specialty: str | None = Form(None),
+    lgpd_consent: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    name_clean = (name or "").strip()
+    email_clean = (email or "").strip().lower()
+    role_value = (role or "").strip().upper()
+    specialty_clean = (specialty or "").strip() or None
+
+    form_data = {
+        "name": name_clean,
+        "email": email_clean,
+        "role": role_value,
+        "specialty": specialty_clean or "",
+        "lgpd_consent": lgpd_consent,
+    }
+    errors: dict[str, str] = {}
+
+    if not name_clean:
+        errors["name"] = "Informe o nome completo."
+
+    if not email_clean:
+        errors["email"] = "Informe o e-mail."
+
+    allowed_roles = {Role.FAMILY.value, Role.PROFESSIONAL.value}
+    if role_value not in allowed_roles:
+        errors["role"] = "Selecione um perfil válido."
+
+    if not password:
+        errors["password"] = "Informe uma senha."
+    elif password != password_confirm:
+        errors["password_confirm"] = "As senhas não coincidem."
+    else:
+        try:
+            validate_password_policy(password)
+        except ValueError as exc:
+            errors["password"] = str(exc)
+
+    if lgpd_consent != "accepted":
+        errors["lgpd_consent"] = "É necessário aceitar os termos de privacidade para continuar."
+
+    if errors:
+        ctx = {
+            "role_options": _role_options(),
+            "form": form_data,
+            "errors": errors,
+        }
+        return render(request, "pages/auth/register.html", ctx)
+
+    password_hash = hash_password(password)
+    role_enum = Role(role_value)
+
+    user = User(
+        name=name_clean,
+        email=email_clean,
+        password_hash=password_hash,
+        role=role_enum,
+        is_active=True,
+    )
+    db.add(user)
+
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        errors["email"] = "Já existe uma conta com este e-mail."
+        ctx = {
+            "role_options": _role_options(),
+            "form": form_data,
+            "errors": errors,
+        }
+        return render(request, "pages/auth/register.html", ctx)
+
+    professional = None
+    if role_enum == Role.PROFESSIONAL:
+        professional = Professional(
+            name=name_clean,
+            user_id=user.id,
+            speciality=specialty_clean,
+            is_active=True,
+        )
+        db.add(professional)
+        db.flush()
+
+    record_audit(
+        db,
+        request=request,
+        user_id=user.id,
+        action="REGISTER",
+        entity="user",
+        entity_id=user.id,
+    )
+    if professional is not None:
+        record_audit(
+            db,
+            request=request,
+            user_id=user.id,
+            action="CREATE",
+            entity="professional",
+            entity_id=professional.id,
+        )
+
+    db.commit()
+
+    login_url = request.url_for("auth_login_get")
+    try:
+        html = render_email("welcome.html").render(
+            {"name": name_clean, "email": email_clean, "login_url": login_url}
+        )
+        send_email("[SAI] Boas-vindas", [email_clean], html, text=None)
+    except Exception as email_error:  # pragma: no cover - best effort
+        print(f"Failed to send welcome email: {email_error}")
+
+    email_param = quote_plus(email_clean)
+    return RedirectResponse(
+        url=f"/login?registered=1&email={email_param}",
+        status_code=303,
+    )
+
+
 @router.get("/logout", name="auth_logout")
-def logout(request: Request, next: str = "/login"):
+def logout(
+    request: Request,
+    next: str = "/login",
+    db: Session = Depends(get_db),
+):
+    # Captura dados da sessão antes de limpá-la para auditoria
+    session_data = _get_user_from_cookie(request)
+
     # Limpa cookie na resposta de redirect e tenta invalidar o token em memória
     target = next or "/login"
     # apenas caminhos relativos seguros
@@ -256,6 +431,17 @@ def logout(request: Request, next: str = "/login"):
     # Remove também cookies de JWT se existirem
     for k in ("access_token", "refresh_token"):
         redirect.delete_cookie(k, path="/")
+
+    user_id = session_data.get("user_id") if session_data else None
+    record_audit(
+        db,
+        request=request,
+        user_id=user_id,
+        action="LOGOUT",
+        entity="auth",
+        entity_id=user_id,
+        autocommit=True,
+    )
     return redirect
 
 

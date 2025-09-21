@@ -1,0 +1,78 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-family page-family-students' %}
+
+{% from "components/card.html" import card %}
+{% from "components/form_field.html" import input_text %}
+{% from "components/table.html" import table %}
+
+{% block title %}Alunos — Família{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/20-pages/family.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+{% set breadcrumbs = breadcrumbs if breadcrumbs is defined else trail or [
+    {'label': 'Início', 'href': '/family/dashboard'},
+    {'label': 'Alunos'}
+] %}
+{% include "_partials/breadcrumbs.html" %}
+
+<div class="grid-2">
+  {% call card(title="Cadastrar aluno", subtitle="Crie uma conta de estudante vinculada a você") %}
+  <form method="post" action="{{ url_for('family_students_create') }}" class="form" novalidate>
+    {{ input_text(
+      name="name",
+      label="Nome completo",
+      value=form.name,
+      required=True,
+      autocomplete="name",
+      error=errors.get('name')
+    ) }}
+
+    {{ input_text(
+      name="email",
+      type="email",
+      label="E-mail",
+      value=form.email,
+      required=True,
+      autocomplete="email",
+      help_text="Este e-mail será utilizado pelo aluno para acessar o sistema.",
+      error=errors.get('email')
+    ) }}
+
+    {{ input_text(
+      name="password",
+      type="password",
+      label="Senha",
+      required=True,
+      autocomplete="new-password",
+      help_text="Mínimo 8 caracteres, com letras maiúsculas, minúsculas, número e símbolo.",
+      error=errors.get('password')
+    ) }}
+
+    {{ input_text(
+      name="password_confirm",
+      type="password",
+      label="Confirme a senha",
+      required=True,
+      autocomplete="new-password",
+      error=errors.get('password_confirm')
+    ) }}
+
+    <div class="form-actions">
+      <button class="btn" type="submit">Cadastrar aluno</button>
+    </div>
+  </form>
+  {% endcall %}
+
+  {% call card(title="Alunos cadastrados", subtitle="Acompanhe quem já está vinculado") %}
+    {% set columns = [
+      {'key': 'name', 'label': 'Nome'},
+      {'key': 'email', 'label': 'E-mail'},
+      {'key': 'created_at', 'label': 'Cadastrado em', 'align': 'right', 'class': 'nowrap'}
+    ] %}
+    {{ table(columns=columns, rows=students, caption="Alunos vinculados", empty_message="Nenhum aluno cadastrado ainda.") }}
+  {% endcall %}
+</div>
+{% endblock %}

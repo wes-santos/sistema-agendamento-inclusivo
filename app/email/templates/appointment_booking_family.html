@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-br">
+  <body style="font-family:system-ui,Segoe UI,Roboto,Arial;line-height:1.4">
+    <h2>Agendamento realizado com sucesso</h2>
+    <p>Olá {{ guardian_name }},</p>
+    <p>O agendamento de <strong>{{ student_name }}</strong> com
+       <strong>{{ professional_name }}</strong> foi realizado com sucesso.</p>
+       
+    <h3>Detalhes do agendamento:</h3>
+    <ul>
+      <li><strong>Aluno:</strong> {{ student_name }}</li>
+      <li><strong>Profissional:</strong> {{ professional_name }}</li>
+      <li><strong>Serviço:</strong> {{ service_name }}</li>
+      <li><strong>Data:</strong> {{ starts_local }}</li>
+      <li><strong>Local:</strong> {{ location }}</li>
+    </ul>
+    
+    <p>Você pode gerenciar seu agendamento usando os links abaixo:</p>
+    <p>
+      <a href="{{ confirm_url }}" style="background:#155EEF;color:white;padding:10px 16px;text-decoration:none;border-radius:6px;margin-right:10px;display:inline-block;">
+        Confirmar agendamento
+      </a>
+      <a href="{{ cancel_url }}" style="background:#EF4444;color:white;padding:10px 16px;text-decoration:none;border-radius:6px;display:inline-block;">
+        Cancelar agendamento
+      </a>
+    </p>
+    
+    <p style="font-size:12px;color:#666">Se você não solicitou este agendamento, por favor cancele usando o link acima. Os links expiram em 48 horas.</p>
+    
+    <p style="font-size:12px;color:#666">Este é um e-mail automático. Por favor, não responda.</p>
+  </body>
+</html>

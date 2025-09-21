@@ -2,6 +2,8 @@
 (() => {
   const d = document;
   
+  // Debug: Log when script loads
+  console.log("Professional schedule script loaded");
 
   const applyBtn = d.querySelector("button[type='submit']");
   if(applyBtn) {
@@ -37,9 +39,13 @@
 
   d.querySelectorAll("[data-nav]").forEach((a) => {
     a.addEventListener("click", (ev) => {
+      // Debug: Log when button is clicked
+      console.log("Navigation button clicked:", a.getAttribute("data-nav"));
+      
       ev.preventDefault();
       const which = a.getAttribute("data-nav");
-      const view = (viewSel && viewSel.value) || "week";
+      // Use week view as default since there's no view selector in the form
+      const view = "week";
       const baseFrom = parseDate(dateFrom && dateFrom.value);
       const baseTo = dateTo && dateTo.value ? parseDate(dateTo.value) : null;
 

@@ -2,8 +2,8 @@
 Concurrency test for appointment creation.
 
 - Logs in as a FAMILY user
-- Finds a valid slot via /appointments/step1 for a given professional
-- Fires N concurrent POST /appointments for the same slot
+- Finds a valid slot via /api/v1/slots for a given professional
+- Fires N concurrent POST /api/v1/appointments for the same slot
 - Prints the status codes (expect 201 for a single winner, 409 for others)
 """
 
@@ -43,7 +43,7 @@ async def find_valid_slot(
     for day in range(0, 14):
         d = (today_local + dt.timedelta(days=day)).isoformat()
         r = await client.get(
-            f"{base}/slots",
+            f"{base}/api/v1/slots",
             params={
                 "professional_id": str(professional_id),
                 "date": d,
@@ -66,7 +66,7 @@ async def run():
     async with httpx.AsyncClient(timeout=10) as c:
         # login
         r = await c.post(
-            f"{args.base}/auth/login",
+            f"{args.base}/api/v1/auth/login",
             json={"email": args.email, "password": args.password},
             headers={"accept": "application/json"},
         )
@@ -75,7 +75,7 @@ async def run():
         jwt = f"Bearer {token}"
         auth_headers = {"Authorization": jwt}
 
-        # find a valid slot via step1
+        # find a valid slot via slots endpoint
         starts_at_iso = await find_valid_slot(
             c, args.base, args.professional_id, args.slot_minutes, auth_headers
         )
@@ -92,7 +92,7 @@ async def run():
 
         async def hit(i: int):
             resp = await c.post(
-                f"{args.base}/appointments", json=payload, headers=auth_headers
+                f"{args.base}/api/v1/appointments", json=payload, headers=auth_headers
             )
             text = resp.text[:200]
             return i, resp.status_code, text
