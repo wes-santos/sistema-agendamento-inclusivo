@@ -84,28 +84,6 @@ def authenticate_user(db: Session, email: str, password: str) -> dict | None:
     return {"id": user.id, "name": user.name, "role": user.role}
 
 
-# ===== Auth demo (troque por sua autenticação real) =====
-def _demo_auth(email: str, password: str) -> dict | None:
-    # Permite alguns usuários de brincadeira
-    demo_users = {
-        "familia@demo": {"id": "u1", "name": "Família Demo", "role": Role.FAMILY},
-        "prof@demo": {
-            "id": "u2",
-            "name": "Profissional Demo",
-            "role": Role.PROFESSIONAL,
-        },
-        "coord@demo": {
-            "id": "u3",
-            "name": "Coordenação Demo",
-            "role": Role.COORDINATION,
-        },
-    }
-    if email in demo_users and password == "demo":
-        u = demo_users[email]
-        return {"id": u["id"], "name": u["name"], "role": u["role"]}
-    return None
-
-
 # EXEMPLO de como plugar na sua auth real:
 # def authenticate_user(db: Session, email: str, password: str) -> Optional[dict]:
 #     user = db.query(User).filter(User.email == email).first()
@@ -120,7 +98,6 @@ def _demo_auth(email: str, password: str) -> dict | None:
 def login_get(
     request: Request,
     next: str = Query("/", alias="next"),
-    demo: bool = Query(False),
     registered: bool = Query(False),
 ):
     flashes: list[dict] = []
@@ -133,7 +110,7 @@ def login_get(
             }
         )
 
-    prefill_email = request.query_params.get("email") or ("familia@demo" if demo else "")
+    prefill_email = request.query_params.get("email") or ""
 
     ctx = {
         "next": next,
@@ -150,7 +127,6 @@ def login_post(
     email: str | None = Form(None),
     password: str | None = Form(None),
     next: str = Form("/"),
-    demo: bool = Query(False),
     db: Session = Depends(get_db),
     json_body: dict | None = Body(None),
 ):
@@ -173,10 +149,6 @@ def login_post(
         return render(request, "pages/auth/login.html", ctx)
     # 1) autenticação real (DB)
     user = authenticate_user(db, email, password)
-    # 2) fallback demo (se habilitado via query)
-    if not user and demo:
-        user = _demo_auth(email, password)
-
     if not user:
         ctx = {
             "error": "E-mail ou senha inválidos.",
@@ -272,7 +244,13 @@ def _role_options() -> list[dict[str, str]]:
 def register_get(request: Request) -> HTMLResponse:
     ctx = {
         "role_options": _role_options(),
-        "form": {"name": "", "email": "", "role": Role.FAMILY.value, "specialty": ""},
+        "form": {
+            "name": "",
+            "email": "",
+            "role": Role.FAMILY.value,
+            "specialty": "",
+            "lgpd_consent": "",
+        },
         "errors": {},
     }
     return render(request, "pages/auth/register.html", ctx)
@@ -287,6 +265,7 @@ def register_post(
     password_confirm: str = Form(...),
     role: str = Form(...),
     specialty: str | None = Form(None),
+    lgpd_consent: str = Form(""),
     db: Session = Depends(get_db),
 ):
     name_clean = (name or "").strip()
@@ -299,6 +278,7 @@ def register_post(
         "email": email_clean,
         "role": role_value,
         "specialty": specialty_clean or "",
+        "lgpd_consent": lgpd_consent,
     }
     errors: dict[str, str] = {}
 
@@ -321,6 +301,9 @@ def register_post(
             validate_password_policy(password)
         except ValueError as exc:
             errors["password"] = str(exc)
+
+    if lgpd_consent != "accepted":
+        errors["lgpd_consent"] = "É necessário aceitar os termos de privacidade para continuar."
 
     if errors:
         ctx = {

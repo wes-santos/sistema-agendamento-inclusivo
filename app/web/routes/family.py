@@ -56,9 +56,8 @@ def _fmt_local(dt: datetime | None, tz: ZoneInfo) -> str | None:
 
 def _render_family_dashboard(
     request: Request,
-    current_user: User | None,
-    db: Session | None,
-    demo: bool = False,
+    current_user: User,
+    db: Session,
 ) -> HTMLResponse:
     ctx = {
         "request": request,
@@ -79,50 +78,34 @@ def _render_family_dashboard(
     tz = ZoneInfo("America/Sao_Paulo")
     now = datetime.now(UTC)
 
-    if demo:
-        ctx["next_appointment"] = {
-            "id": "demo-1",
-            "service_name": "Fonoaudiologia",
-            "professional_name": "Dra. Ana",
-            "starts_at_local": "14/09/2025 10:00",
-            "ends_at_local": "14/09/2025 10:45",
-            "starts_at_human": "Amanhã às 10:00",
-            "location": "Sala 3",
-            "status": "confirmed",
-            "confirm_url": "/confirm/DEMO_TOKEN",
-            "cancel_url": "/cancel/DEMO_TOKEN",
-        }
-    else:
-        # Próximo agendamento do responsável (qualquer aluno)
-        next_appt = (
-            db.query(Appointment, Professional, Student)
-            .join(Student, Student.id == Appointment.student_id)
-            .join(Professional, Professional.id == Appointment.professional_id)
-            .filter(
-                Student.guardian_user_id == current_user.id,
-                Appointment.starts_at >= now,
-                Appointment.status.in_([
-                    AppointmentStatus.SCHEDULED,
-                    AppointmentStatus.CONFIRMED,
-                ]),
-            )
-            .order_by(Appointment.starts_at.asc())
-            .first()
+    next_appt = (
+        db.query(Appointment, Professional, Student)
+        .join(Student, Student.id == Appointment.student_id)
+        .join(Professional, Professional.id == Appointment.professional_id)
+        .filter(
+            Student.guardian_user_id == current_user.id,
+            Appointment.starts_at >= now,
+            Appointment.status.in_(
+                [AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED]
+            ),
         )
-        if next_appt:
-            ap, pr, st = next_appt
-            ctx["next_appointment"] = {
-                "id": ap.id,
-                "service_name": ap.service,
-                "professional_name": pr.name or getattr(pr.user, "name", None),
-                "starts_at_local": _fmt_local(ap.starts_at, tz),
-                "ends_at_local": _fmt_local(ap.ends_at, tz),
-                "starts_at_human": _fmt_local(ap.starts_at, tz),
-                "location": ap.location,
-                "status": _to_badge_status(ap.status),
-                "confirm_url": None,
-                "cancel_url": None,
-            }
+        .order_by(Appointment.starts_at.asc())
+        .first()
+    )
+    if next_appt:
+        ap, pr, st = next_appt
+        ctx["next_appointment"] = {
+            "id": ap.id,
+            "service_name": ap.service,
+            "professional_name": pr.name or getattr(pr.user, "name", None),
+            "starts_at_local": _fmt_local(ap.starts_at, tz),
+            "ends_at_local": _fmt_local(ap.ends_at, tz),
+            "starts_at_human": _fmt_local(ap.starts_at, tz),
+            "location": ap.location,
+            "status": _to_badge_status(ap.status),
+            "confirm_url": None,
+            "cancel_url": None,
+        }
 
     # KPIs simples
     start_30d_ago = now - timedelta(days=30)
@@ -170,41 +153,6 @@ def _render_family_dashboard(
     ]
 
     return render(request, "pages/family/dashboard.html", ctx)
-
-
-def _demo_family_appts(base: datetime):
-    base = base.replace(hour=10, minute=0, second=0, microsecond=0)
-    items = [
-        {
-            "id": "a1",
-            "service_name": "Psicopedagogia",
-            "professional_name": "Marcos",
-            "starts_at_local": (base - timedelta(days=2)).strftime("%d/%m/%Y %H:%M"),
-            "ends_at_local": (
-                base - timedelta(days=2) + timedelta(minutes=45)
-            ).strftime("%d/%m/%Y %H:%M"),
-            "status": "scheduled",
-            "location": "Sala 1",
-            "confirm_url": "/family/appointments/a1/confirm",
-            "cancel_url": "/family/appointments/a1/cancel",
-        },
-        {
-            "id": "a2",
-            "service_name": "Neuropsicologia",
-            "professional_name": "Carla",
-            "starts_at_local": (base - timedelta(days=4)).strftime("%d/%m/%Y %H:%M"),
-            "ends_at_local": (
-                base - timedelta(days=4) + timedelta(minutes=45)
-            ).strftime("%d/%m/%Y %H:%M"),
-            "status": "canceled",
-            "location": "Sala 3",
-            "confirm_url": None,
-            "cancel_url": None,
-        },
-    ]
-    return items
-
-
 # LISTA
 @router.get(
     "/family/appointments", response_class=HTMLResponse, name="family_appointments"
@@ -212,26 +160,12 @@ def _demo_family_appts(base: datetime):
 def ui_family_appointments(
     request: Request,
     current_user: User = Depends(require_roles(Role.FAMILY)),
-    demo: bool = Query(False),
     status: str | None = Query(None),
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
     service_id: str | None = Query(None),
     db: Session = Depends(get_db),
 ):
-    if demo:
-        appts = _demo_family_appts(datetime.now())
-        return render(
-            request,
-            "pages/family/appointments.html",
-            {
-                "current_user": current_user,
-                "appointments": appts,
-                "filters": {},
-                "pagination": None,
-            },
-        )
-
     tz = ZoneInfo("America/Sao_Paulo")
     q = (
         db.query(Appointment, Professional, Student)
@@ -701,21 +635,9 @@ def ui_family_appointment_detail(
     appt_id: int,
     request: Request,
     current_user: User = Depends(require_roles(Role.FAMILY)),
-    demo: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     tz = ZoneInfo("America/Sao_Paulo")
-
-    if demo:
-        appts = _demo_family_appts(datetime.now())
-        appt = next((a for a in appts if str(a["id"]) == str(appt_id)), None)
-        if not appt:
-            return RedirectResponse("/family/appointments", status_code=303)
-        return render(
-            request,
-            "pages/family/appointment_detail.html",
-            {"current_user": current_user, "appointment": appt},
-        )
 
     row = (
         db.query(Appointment, Professional, Student)
@@ -748,22 +670,13 @@ def ui_family_appointment_detail(
         "pages/family/appointment_detail.html",
         {"current_user": current_user, "appointment": appt_ctx},
     )
-
-
-@router.get("/__dev/family/dashboard", response_class=HTMLResponse)
-def preview_family_dashboard(request: Request, demo: bool = True):
-    # Reusa a lógica acima mas sem require_roles
-    return _render_family_dashboard(request, current_user=None, db=None, demo=demo)
-
-
 @router.get("/family/dashboard", response_class=HTMLResponse)
 def ui_family_dashboard(
     request: Request,
     current_user: User = Depends(require_roles(Role.FAMILY)),
     db: Session = Depends(get_db),
-    demo: bool = False,  # ?demo=1 para ver conteúdo fake
 ):
-    return _render_family_dashboard(request, current_user, db, demo)
+    return _render_family_dashboard(request, current_user, db)
 
 
 # ---------------------------

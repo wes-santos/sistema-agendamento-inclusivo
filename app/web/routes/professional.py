@@ -81,51 +81,6 @@ def build_nav_urls_range(
     }
 
 
-# --------------------------
-# Demo data
-# --------------------------
-def demo_sessions_for_week(week_start: date) -> list[dict[str, Any]]:
-    """Gera 3 sessões fake espalhadas na semana (determinístico)."""
-    sessions = []
-    # Segunda 09:00
-    d0 = week_start
-    sessions.append(
-        {
-            "date": d0,
-            "starts_at": datetime.combine(d0, time(9, 0)),
-            "ends_at": datetime.combine(d0, time(9, 45)),
-            "client_name": "João",
-            "service_name": "Fonoaudiologia",
-            "status": "scheduled",
-        }
-    )
-    # Quarta 14:00
-    d2 = week_start + timedelta(days=2)
-    sessions.append(
-        {
-            "date": d2,
-            "starts_at": datetime.combine(d2, time(14, 0)),
-            "ends_at": datetime.combine(d2, time(14, 45)),
-            "client_name": "Maria",
-            "service_name": "Psicopedagogia",
-            "status": "confirmed",
-        }
-    )
-    # Sexta 10:00
-    d4 = week_start + timedelta(days=4)
-    sessions.append(
-        {
-            "date": d4,
-            "starts_at": datetime.combine(d4, time(10, 0)),
-            "ends_at": datetime.combine(d4, time(10, 45)),
-            "client_name": "Pedro",
-            "service_name": "Terapia Ocupacional",
-            "status": "scheduled",
-        }
-    )
-    return sessions
-
-
 def to_local_labels(st: datetime, en: datetime | None) -> dict[str, str]:
     """Formata horários em strings 'dd/mm/yyyy hh:mm' (ajuste fuso se necessário)."""
     starts_at_local = st.strftime("%d/%m/%Y %H:%M")
@@ -138,9 +93,8 @@ def to_local_labels(st: datetime, en: datetime | None) -> dict[str, str]:
 # --------------------------
 def _render_professional_dashboard(
     request: Request,
-    current_user: User | None,
-    db: Session | None,
-    demo: bool = False,
+    current_user: User,
+    db: Session,
     *,
     tz_local: str = "America/Sao_Paulo",
 ):
@@ -155,81 +109,66 @@ def _render_professional_dashboard(
     kpis = {"today": 0, "week": 0, "attended_30d": 0, "no_show_30d": 0}
     today_sessions: list[dict[str, Any]] = []
 
-    if demo:
-        sessions = demo_sessions_for_week(week_start)
-        # KPI semana
-        kpis["week"] = len(sessions)
-        # Sessões de hoje
-        for s in sessions:
-            if s["date"] == today:
-                kpis["today"] += 1
-                today_sessions.append(
-                    {
-                        "id": f"demo-{s['starts_at'].isoformat()}",
-                        "client_name": s["client_name"],
-                        "service_name": s["service_name"],
-                        **to_local_labels(s["starts_at"], s["ends_at"]),
-                        "status": s["status"],
-                        "start_url": "/start/DEMO",
-                        "cancel_url": "/cancel/DEMO",
-                    }
-                )
-        # Proxima sessão (menor datetime >= agora na semana)
-        now = datetime.now()
-        upcoming = sorted(
-            [s for s in sessions if s["starts_at"] >= now], key=lambda x: x["starts_at"]
-        )
-        if not upcoming:
-            upcoming = sorted(sessions, key=lambda x: x["starts_at"])
-        s = upcoming[0]
-        next_session = {
-            "id": "next-demo",
-            "client_name": s["client_name"],
-            "service_name": s["service_name"],
-            "starts_at_human": "Em breve"
-            if s["date"] == today
-            else PT_WEEKDAYS_SHORT[s["date"].weekday()],
-            **to_local_labels(s["starts_at"], s["ends_at"]),
-            "location": "Sala 2",
-            "status": s["status"],
-            "start_url": "/start/DEMO",
-            "cancel_url": "/cancel/DEMO",
-        }
-        # KPIs simples últimos 30 dias (fake)
-        kpis["attended_30d"] = 12
-        kpis["no_show_30d"] = 2
-    else:
-        # Dados reais: sessões do profissional vinculado ao usuário
-        tz = ZoneInfo("America/Sao_Paulo")
-        now = datetime.now(UTC)
-        prof = (
-            db.query(Professional)
-            .filter(Professional.user_id == current_user.id)
-            .one_or_none()
-        )
-        prof_id = prof.id if prof else None
-        if prof_id is not None:
-            # Próxima sessão
-            ap = (
-                db.query(Appointment)
-                .filter(
-                    Appointment.professional_id == prof_id,
-                    Appointment.starts_at >= now,
-                    Appointment.status == AppointmentStatus.SCHEDULED,
-                )
-                .order_by(Appointment.starts_at.asc())
-                .first()
+    now = datetime.now(UTC)
+    prof = (
+        db.query(Professional)
+        .filter(Professional.user_id == current_user.id)
+        .one_or_none()
+    )
+    prof_id = prof.id if prof else None
+    if prof_id is not None:
+        # Próxima sessão
+        ap = (
+            db.query(Appointment)
+            .filter(
+                Appointment.professional_id == prof_id,
+                Appointment.starts_at >= now,
+                Appointment.status == AppointmentStatus.SCHEDULED,
             )
-            if ap:
-                next_session = {
+            .order_by(Appointment.starts_at.asc())
+            .first()
+        )
+        if ap:
+            next_session = {
+                "id": ap.id,
+                "client_name": "Aluno",
+                "service_name": ap.service,
+                "starts_at_human": ap.starts_at.astimezone(tz).strftime("%d/%m %H:%M"),
+                **to_local_labels(ap.starts_at, ap.ends_at),
+                "location": ap.location,
+                "status": (
+                    "confirmed"
+                    if ap.status == AppointmentStatus.CONFIRMED
+                    else (
+                        "canceled"
+                        if ap.status == AppointmentStatus.CANCELLED
+                        else ("past" if ap.status == AppointmentStatus.DONE else "scheduled")
+                    )
+                ),
+                "start_url": None,
+                "cancel_url": None,
+            }
+
+        # Hoje
+        start_today = datetime.combine(today, time.min, tzinfo=tz).astimezone(UTC)
+        end_today = datetime.combine(today, time.max, tzinfo=tz).astimezone(UTC)
+        todays = (
+            db.query(Appointment)
+            .filter(
+                Appointment.professional_id == prof_id,
+                Appointment.starts_at >= start_today,
+                Appointment.starts_at <= end_today,
+            )
+            .order_by(Appointment.starts_at.asc())
+            .all()
+        )
+        for ap in todays:
+            today_sessions.append(
+                {
                     "id": ap.id,
                     "client_name": "Aluno",
                     "service_name": ap.service,
-                    "starts_at_human": ap.starts_at.astimezone(tz).strftime(
-                        "%d/%m %H:%M"
-                    ),
                     **to_local_labels(ap.starts_at, ap.ends_at),
-                    "location": ap.location,
                     "status": (
                         "confirmed"
                         if ap.status == AppointmentStatus.CONFIRMED
@@ -242,77 +181,36 @@ def _render_professional_dashboard(
                     "start_url": None,
                     "cancel_url": None,
                 }
+            )
+        kpis["today"] = len(todays)
 
-            # Hoje
-            start_today = (
-                datetime.combine(today, time.min, tzinfo=tz).astimezone(UTC)
+        # Semana
+        ws = start_of_week(today)
+        we = ws + timedelta(days=6)
+        start_week = datetime.combine(ws, time.min, tzinfo=tz).astimezone(UTC)
+        end_week = datetime.combine(we, time.max, tzinfo=tz).astimezone(UTC)
+        kpis["week"] = (
+            db.query(Appointment)
+            .filter(
+                Appointment.professional_id == prof_id,
+                Appointment.starts_at >= start_week,
+                Appointment.starts_at <= end_week,
             )
-            end_today = (
-                datetime.combine(today, time.max, tzinfo=tz).astimezone(UTC)
-            )
-            todays = (
-                db.query(Appointment)
-                .filter(
-                    Appointment.professional_id == prof_id,
-                    Appointment.starts_at >= start_today,
-                    Appointment.starts_at <= end_today,
-                )
-                .order_by(Appointment.starts_at.asc())
-                .all()
-            )
-            for ap in todays:
-                today_sessions.append(
-                    {
-                        "id": ap.id,
-                        "client_name": "Aluno",
-                        "service_name": ap.service,
-                        **to_local_labels(ap.starts_at, ap.ends_at),
-                        "status": (
-                            "confirmed"
-                            if ap.status == AppointmentStatus.CONFIRMED
-                            else (
-                                "canceled"
-                                if ap.status == AppointmentStatus.CANCELLED
-                                else ("past" if ap.status == AppointmentStatus.DONE else "scheduled")
-                            )
-                        ),
-                        "start_url": None,
-                        "cancel_url": None,
-                    }
-                )
-            kpis["today"] = len(todays)
+            .count()
+        )
 
-            # Semana
-            ws = start_of_week(today)
-            we = ws + timedelta(days=6)
-            start_week = (
-                datetime.combine(ws, time.min, tzinfo=tz).astimezone(UTC)
+        # Últimos 30 dias — DONE como compareceu, no_show não mapeado (0)
+        start_30d_ago = now - timedelta(days=30)
+        kpis["attended_30d"] = (
+            db.query(Appointment)
+            .filter(
+                Appointment.professional_id == prof_id,
+                Appointment.starts_at >= start_30d_ago,
+                Appointment.status == AppointmentStatus.DONE,
             )
-            end_week = (
-                datetime.combine(we, time.max, tzinfo=tz).astimezone(UTC)
-            )
-            kpis["week"] = (
-                db.query(Appointment)
-                .filter(
-                    Appointment.professional_id == prof_id,
-                    Appointment.starts_at >= start_week,
-                    Appointment.starts_at <= end_week,
-                )
-                .count()
-            )
-
-            # Últimos 30 dias — DONE como compareceu, no_show não mapeado (0)
-            start_30d_ago = now - timedelta(days=30)
-            kpis["attended_30d"] = (
-                db.query(Appointment)
-                .filter(
-                    Appointment.professional_id == prof_id,
-                    Appointment.starts_at >= start_30d_ago,
-                    Appointment.status == AppointmentStatus.DONE,
-                )
-                .count()
-            )
-            kpis["no_show_30d"] = 0
+            .count()
+        )
+        kpis["no_show_30d"] = 0
 
     ctx = {
         "request": request,
@@ -330,124 +228,30 @@ def ui_professional_dashboard(
     request: Request,
     current_user: User = Depends(require_roles(Role.PROFESSIONAL)),
     db: Session = Depends(get_db),
-    demo: bool = Query(False),
 ):
-    return _render_professional_dashboard(request, current_user, db, demo)
-
-
-# Preview dev (sem auth)
-@router.get("/__dev/professional/dashboard", response_class=HTMLResponse)
-def preview_professional_dashboard(request: Request, demo: bool = Query(True)):
-    return _render_professional_dashboard(request, None, None, demo)
+    return _render_professional_dashboard(request, current_user, db)
 
 
 # --------------------------
 # Render: SCHEDULE (day/week)
 # --------------------------
-def _week_payload(base_date: date, demo: bool) -> dict[str, Any]:
-    week_start = start_of_week(base_date)
-    days = [
-        {"label": f"{PT_WEEKDAYS_SHORT[i]} # {fmt_dmy(week_start + timedelta(days=i))}"}
-        for i in range(7)
-    ]
-    rows = []
-    if not demo:
-        # vazio
-        for ts in timeslots():
-            rows.append(
-                {
-                    "label": ts,
-                    "cells": [{"state": "is-free", "items": []} for _ in range(7)],
-                }
-            )
-        return {"days": days, "rows": rows}
-
-    sessions = demo_sessions_for_week(week_start)
-    sessions_map: dict[tuple, list[dict[str, Any]]] = {}
-    for s in sessions:
-        key = (s["date"], fmt_hm(s["starts_at"].time()))
-        sessions_map.setdefault(key, []).append(s)
-
-    for ts in timeslots():
-        cells = []
-        for i in range(7):
-            d = week_start + timedelta(days=i)
-            items = []
-            state = "is-free"
-            key = (d, ts)
-            if key in sessions_map:
-                for s in sessions_map[key]:
-                    items.append(
-                        {
-                            "client_name": s["client_name"],
-                            "service_name": s["service_name"],
-                            "starts_at_local": f"{fmt_hm(s['starts_at'].time())}",
-                            "ends_at_local": f"{fmt_hm(s['ends_at'].time())}",
-                        }
-                    )
-                state = "is-busy"
-            cells.append({"state": state, "items": items})
-        rows.append({"label": ts, "cells": cells})
-
-    return {"days": days, "rows": rows}
-
-
-def _day_payload(base_date: date, demo: bool) -> list[dict[str, Any]]:
-    rows = []
-    if not demo:
-        for ts in timeslots():
-            rows.append({"label": ts, "slot": {"state": "is-free", "items": []}})
-        return rows
-
-    # Marca 09:00 e 14:00 como ocupados no dia-base (se coincidirem com o demo)
-    demo_map = {
-        "09:00": {"client_name": "João", "service_name": "Fonoaudiologia"},
-        "14:00": {"client_name": "Maria", "service_name": "Psicopedagogia"},
-    }
-    for ts in timeslots():
-        if ts in demo_map:
-            item = demo_map[ts]
-            rows.append(
-                {
-                    "label": ts,
-                    "slot": {
-                        "state": "is-busy",
-                        "items": [
-                            {
-                                "client_name": item["client_name"],
-                                "service_name": item["service_name"],
-                                "starts_at_local": ts,
-                                "ends_at_local": (
-                                    datetime.strptime(ts, "%H:%M")
-                                    + timedelta(minutes=45)
-                                ).strftime("%H:%M"),
-                            }
-                        ],
-                    },
-                }
-            )
-        else:
-            rows.append({"label": ts, "slot": {"state": "is-free", "items": []}})
-    return rows
-
-
 def _render_professional_schedule(
     request: Request,
-    current_user: User | None,
-    db: Session | None,
+    current_user: User,
+    db: Session,
     filters: dict[str, Any],
-    demo: bool,
 ) -> HTMLResponse:
-    # filtros
     view = "week"
-    # parse date range
+
     df_str = (filters.get("date_from") or "").strip()
     dt_str = (filters.get("date_to") or "").strip()
-    def _parse_date(s: str | None, fallback: date) -> date:
+
+    def _parse_date(value: str | None, fallback: date) -> date:
         try:
-            return date.fromisoformat(s) if s else fallback
+            return date.fromisoformat(value) if value else fallback
         except Exception:
             return fallback
+
     today_d = date.today()
     if df_str and dt_str:
         range_from = _parse_date(df_str, today_d)
@@ -455,13 +259,6 @@ def _render_professional_schedule(
     else:
         ws = start_of_week(today_d)
         range_from, range_to = ws, ws + timedelta(days=6)
-
-    # Services list (fallback static; replaced with DB values below if available)
-    services = [
-        {"id": "fono", "name": "Fonoaudiologia"},
-        {"id": "psico", "name": "Psicopedagogia"},
-        {"id": "neuro", "name": "Neuropsicologia"},
-    ]
 
     nav = build_nav_urls_range(
         "/professional/schedule",
@@ -480,110 +277,118 @@ def _render_professional_schedule(
             "view": view,
             "service_id": filters.get("service_id", ""),
         },
-        "services": services,
+        "services": [],
         "nav": nav,
         "day_rows": None,
-        "week": None,
+        "week": _empty_week_payload(range_from),
     }
 
-    # Real data when possible (fallback to demo renderer)
-    if not demo and db and current_user:
-        tz = ZoneInfo("America/Sao_Paulo")
+    tz = ZoneInfo("America/Sao_Paulo")
+    prof = (
+        db.query(Professional)
+        .filter(Professional.user_id == current_user.id)
+        .one_or_none()
+    )
+    prof_id = prof.id if prof else None
 
-        # resolve professional id
-        prof = (
-            db.query(Professional)
-            .filter(Professional.user_id == current_user.id)
-            .one_or_none()
-        )
-        prof_id = prof.id if prof else None
+    services: list[dict[str, str]] = []
 
-        if prof_id is None:
-            # keep empty grids
-            pass
-        else:
-            # replace services with distinct values from DB for this professional
-            try:
-                db_services = (
-                    db.query(Appointment.service)
-                    .filter(Appointment.professional_id == prof_id)
-                    .distinct()
-                    .order_by(Appointment.service.asc())
-                    .all()
-                )
-                services = [
-                    {"id": s or "", "name": s or "(sem descrição)"} for (s,) in db_services
-                ]
-            except Exception:
-                services = []
-            # window
-            ws = range_from
-            start_local = datetime.combine(ws, time.min, tzinfo=tz)
-            if range_to:
-                end_local = datetime.combine(range_to, time.max, tzinfo=tz)
-            else:
-                end_local = start_local + timedelta(days=7) - timedelta(microseconds=1)
-
-            start_utc = start_local.astimezone(UTC)
-            end_utc = end_local.astimezone(UTC)
-
-            q = (
-                db.query(Appointment)
-                .filter(
-                    Appointment.professional_id == prof_id,
-                    Appointment.starts_at >= start_utc,
-                    Appointment.starts_at <= end_utc,
-                )
-                .order_by(Appointment.starts_at.asc())
+    if prof_id is not None:
+        try:
+            db_services = (
+                db.query(Appointment.service)
+                .filter(Appointment.professional_id == prof_id)
+                .distinct()
+                .order_by(Appointment.service.asc())
+                .all()
             )
-            svc = (filters.get("service_id") or "").strip()
-            if svc:
-                q = q.filter(Appointment.service == svc)
-
-            appts = q.all()
-
-            def _label_hm(dt: datetime) -> str:
-                return dt.astimezone(tz).strftime("%H:%M")
-
-            # week grid
-            week = {"days": [], "rows": []}
-            ws = range_from
-            week["days"] = [
-                {"label": f"{PT_WEEKDAYS_SHORT[i]} # {fmt_dmy(ws + timedelta(days=i))}"}
-                for i in range(7)
+            services = [
+                {"id": s or "", "name": s or "(sem descrição)"} for (s,) in db_services
             ]
-            # map appointments by (day_index, hour)
-            ap_map: dict[tuple[int, int], list[Appointment]] = {}
-            for ap in appts:
-                lt = ap.starts_at.astimezone(tz)
-                day_idx = (lt.date() - ws).days
-                if 0 <= day_idx <= 6:
-                    ap_map.setdefault((day_idx, lt.hour), []).append(ap)
-            for h in range(8, 18):
-                cells = []
-                for day_idx in range(7):
-                    items = []
-                    for ap in ap_map.get((day_idx, h), []):
-                        items.append(
-                            {
-                                "client_name": "Aluno",
-                                "service_name": ap.service,
-                                "starts_at_local": _label_hm(ap.starts_at),
-                                "ends_at_local": _label_hm(ap.ends_at),
-                            }
-                        )
-                    state = "is-busy" if items else "is-free"
-                    cells.append({"state": state, "items": items})
-                week["rows"].append({"label": f"{h:02d}:00", "cells": cells})
-            context["week"] = week
+        except Exception:
+            services = []
 
-    # Fallback demo rendering if no real data was constructed
-    if context["week"] is None:
-        # build demo week using range_from
-        context["week"] = _week_payload(range_from, demo)
+        week_start = start_of_week(range_from)
+        start_local = datetime.combine(week_start, time.min, tzinfo=tz)
+        if range_to:
+            end_local = datetime.combine(range_to, time.max, tzinfo=tz)
+        else:
+            end_local = start_local + timedelta(days=7) - timedelta(microseconds=1)
+
+        start_utc = start_local.astimezone(UTC)
+        end_utc = end_local.astimezone(UTC)
+
+        q = (
+            db.query(Appointment)
+            .filter(
+                Appointment.professional_id == prof_id,
+                Appointment.starts_at >= start_utc,
+                Appointment.starts_at <= end_utc,
+            )
+            .order_by(Appointment.starts_at.asc())
+        )
+        svc = (filters.get("service_id") or "").strip()
+        if svc:
+            q = q.filter(Appointment.service == svc)
+
+        appts = q.all()
+
+        def _label_hm(dt_obj: datetime) -> str:
+            return dt_obj.astimezone(tz).strftime("%H:%M")
+
+        week = {"days": [], "rows": []}
+        week["days"] = [
+            {"label": f"{PT_WEEKDAYS_SHORT[i]} # {fmt_dmy(week_start + timedelta(days=i))}"}
+            for i in range(7)
+        ]
+
+        ap_map: dict[tuple[int, int], list[Appointment]] = {}
+        for ap in appts:
+            lt = ap.starts_at.astimezone(tz)
+            day_idx = (lt.date() - week_start).days
+            if 0 <= day_idx <= 6:
+                ap_map.setdefault((day_idx, lt.hour), []).append(ap)
+
+        for hour in range(8, 18):
+            cells = []
+            for day_idx in range(7):
+                items = []
+                for ap in ap_map.get((day_idx, hour), []):
+                    items.append(
+                        {
+                            "client_name": "Aluno",
+                            "service_name": ap.service,
+                            "starts_at_local": _label_hm(ap.starts_at),
+                            "ends_at_local": _label_hm(ap.ends_at),
+                        }
+                    )
+                state = "is-busy" if items else "is-free"
+                cells.append({"state": state, "items": items})
+            week["rows"].append({"label": f"{hour:02d}:00", "cells": cells})
+
+        context["week"] = week
+
+    context["services"] = services
 
     return render(request, "pages/professional/schedule.html", context)
 
+
+
+def _empty_week_payload(base_date: date) -> dict[str, Any]:
+    week_start = start_of_week(base_date)
+    days = [
+        {"label": f"{PT_WEEKDAYS_SHORT[i]} # {fmt_dmy(week_start + timedelta(days=i))}"}
+        for i in range(7)
+    ]
+    rows = []
+    for hour in range(8, 18):
+        rows.append(
+            {
+                "label": f"{hour:02d}:00",
+                "cells": [{"state": "is-free", "items": []} for _ in range(7)],
+            }
+        )
+    return {"days": days, "rows": rows}
 
 @router.get("/professional/schedule", response_class=HTMLResponse)
 def ui_professional_schedule(
@@ -593,22 +398,9 @@ def ui_professional_schedule(
     date_from: str | None = Query(None),
     date_to: str | None = Query(None),
     service_id: str | None = Query(None),
-    demo: bool = Query(False),
 ):
     filters = {"date_from": date_from, "date_to": date_to, "service_id": service_id}
-    return _render_professional_schedule(request, current_user, db, filters, demo)
-
-
-# Preview dev (sem auth)
-@router.get("/__dev/professional/schedule", response_class=HTMLResponse)
-def preview_professional_schedule(
-    request: Request,
-    date_str: str | None = Query(None, alias="date"),
-    service_id: str | None = Query(None),
-    demo: bool = Query(True),
-):
-    filters = {"date": date_str, "service_id": service_id}
-    return _render_professional_schedule(request, None, None, filters, demo)
+    return _render_professional_schedule(request, current_user, db, filters)
 
 
 # --------------------------
