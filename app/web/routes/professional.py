@@ -6,14 +6,16 @@ from typing import Annotated, Any
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Depends, Form, HTTPException, Path, Query, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import and_, case, func, or_
 from sqlalchemy.orm import Session, joinedload
 
+from app.audit.helpers import record_audit
 from app.core.settings import settings
 from app.db import get_db
 from app.deps import require_roles
+from app.models.availability import Availability
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.professional import Professional
 from app.models.student import Student
@@ -27,6 +29,16 @@ router = APIRouter()
 # Helpers (datas & formatação)
 # --------------------------
 PT_WEEKDAYS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"]
+PT_WEEKDAYS_FULL = [
+    "Segunda",
+    "Terça",
+    "Quarta",
+    "Quinta",
+    "Sexta",
+    "Sábado",
+    "Domingo",
+]
+_REF_MONDAY = datetime(2025, 1, 6, tzinfo=ZoneInfo("UTC"))
 
 
 def fmt_dmy(dt: date) -> str:
@@ -35,6 +47,26 @@ def fmt_dmy(dt: date) -> str:
 
 def fmt_hm(t: time) -> str:
     return f"{t.hour:02d}:{t.minute:02d}"
+
+
+def _str_to_time(val: str) -> time:
+    hours, minutes = map(int, val.split(":"))
+    return time(hours, minutes)
+
+
+def _time_to_str(val: time) -> str:
+    return f"{val.hour:02d}:{val.minute:02d}"
+
+
+def _time_local_to_utc_time_for_weekday(
+    t_local: time, weekday: int, tz: ZoneInfo
+) -> time:
+    base = _REF_MONDAY + timedelta(days=weekday)
+    dt_local = datetime(
+        base.year, base.month, base.day, t_local.hour, t_local.minute, tzinfo=tz
+    )
+    dt_utc = dt_local.astimezone(ZoneInfo("UTC"))
+    return time(dt_utc.hour, dt_utc.minute)
 
 
 def parse_date_filter(raw: str | None) -> date | None:
@@ -46,6 +78,91 @@ def parse_date_filter(raw: str | None) -> date | None:
         except Exception:
             continue
     return None
+
+
+def _get_professional_for_user(db: Session, user_id: int) -> Professional | None:
+    return (
+        db.query(Professional)
+        .filter(Professional.user_id == user_id)
+        .one_or_none()
+    )
+
+
+def _require_professional_for_user(
+    db: Session, current_user: User
+) -> Professional:
+    prof = _get_professional_for_user(db, current_user.id)
+    if not prof:
+        raise HTTPException(400, "Perfil profissional não encontrado para o usuário.")
+    if not prof.is_active:
+        raise HTTPException(400, "Seu perfil de profissional está inativo.")
+    return prof
+
+
+def _query_availability(
+    db: Session, professional_id: int
+) -> list[Availability]:
+    return (
+        db.query(Availability)
+        .filter(Availability.professional_id == professional_id)
+        .order_by(Availability.weekday.asc(), Availability.starts_utc.asc())
+        .all()
+    )
+
+
+def _availability_view(
+    rows: list[Availability], tz: ZoneInfo
+) -> list[dict[str, Any]]:
+    grouped: list[dict[str, Any]] = []
+    by_weekday: dict[int, list[dict[str, str]]] = {i: [] for i in range(7)}
+
+    for row in rows:
+        base = _REF_MONDAY + timedelta(days=row.weekday)
+        start_dt = datetime(
+            base.year,
+            base.month,
+            base.day,
+            row.starts_utc.hour,
+            row.starts_utc.minute,
+            tzinfo=ZoneInfo("UTC"),
+        ).astimezone(tz)
+        end_dt = datetime(
+            base.year,
+            base.month,
+            base.day,
+            row.ends_utc.hour,
+            row.ends_utc.minute,
+            tzinfo=ZoneInfo("UTC"),
+        ).astimezone(tz)
+        by_weekday[row.weekday].append(
+            {
+                "start_local": start_dt.strftime("%H:%M"),
+                "end_local": end_dt.strftime("%H:%M"),
+                "start_utc": _time_to_str(row.starts_utc),
+                "end_utc": _time_to_str(row.ends_utc),
+            }
+        )
+
+    for wd in range(7):
+        grouped.append(
+            {
+                "weekday": wd,
+                "weekday_label": PT_WEEKDAYS_FULL[wd],
+                "slots": by_weekday[wd],
+            }
+        )
+    return grouped
+
+
+def _has_overlap(
+    existing: Iterable[Availability], start_utc: time, end_utc: time
+) -> bool:
+    for row in existing:
+        s = row.starts_utc
+        e = row.ends_utc
+        if not (end_utc <= s or start_utc >= e):
+            return True
+    return False
 
 
 def start_of_week(d: date) -> date:
@@ -557,6 +674,293 @@ def _render_professional_reports(
         "rows": rows,
     }
     return render(request, "pages/professional/reports.html", ctx)
+
+
+def _render_professional_availability(
+    request: Request,
+    current_user: User,
+    db: Session,
+    *,
+    form: dict[str, str] | None = None,
+    errors: dict[str, str] | None = None,
+    flashes: list[dict[str, str]] | None = None,
+) -> HTMLResponse:
+    prof = _require_professional_for_user(db, current_user)
+    tz = ZoneInfo("America/Sao_Paulo")
+    rows = _query_availability(db, prof.id)
+    availability = _availability_view(rows, tz)
+
+    ctx = {
+        "current_user": current_user,
+        "availability": availability,
+        "form": form
+        or {
+            "weekday": "",
+            "start": "",
+            "end": "",
+        },
+        "errors": errors or {},
+        "flashes": flashes or [],
+        "timezone_label": tz.key,
+        "weekday_options": [
+            {"value": str(idx), "label": label}
+            for idx, label in enumerate(PT_WEEKDAYS_FULL)
+        ],
+    }
+    return render(request, "pages/professional/availability.html", ctx)
+
+
+@router.get(
+    "/professional/availability",
+    response_class=HTMLResponse,
+    name="professional_availability",
+)
+def ui_professional_availability(
+    request: Request,
+    current_user: User = Depends(require_roles(Role.PROFESSIONAL)),
+    db: Session = Depends(get_db),
+    created: bool = Query(False),
+    deleted: bool = Query(False),
+):
+    flashes: list[dict[str, str]] = []
+    if created:
+        flashes.append(
+            {
+                "type": "success",
+                "title": "Disponibilidade registrada",
+                "message": "Seu horário foi adicionado com sucesso.",
+            }
+        )
+    if deleted:
+        flashes.append(
+            {
+                "type": "info",
+                "title": "Disponibilidade removida",
+                "message": "O intervalo selecionado foi excluído.",
+            }
+        )
+
+    return _render_professional_availability(
+        request,
+        current_user,
+        db,
+        flashes=flashes,
+    )
+
+
+@router.post("/professional/availability", response_class=HTMLResponse)
+def ui_professional_availability_create(
+    request: Request,
+    current_user: User = Depends(require_roles(Role.PROFESSIONAL)),
+    db: Session = Depends(get_db),
+    weekday: str = Form(...),
+    start: str = Form(...),
+    end: str = Form(...),
+    tz_local: str = Form("America/Sao_Paulo"),
+):
+    form = {"weekday": weekday, "start": start, "end": end}
+    errors: dict[str, str] = {}
+
+    try:
+        weekday_int = int(weekday)
+        if weekday_int < 0 or weekday_int > 6:
+            raise ValueError
+    except Exception:
+        errors["weekday"] = "Selecione um dia válido."
+        weekday_int = None  # type: ignore
+
+    if not start:
+        errors["start"] = "Informe o horário inicial."
+    if not end:
+        errors.setdefault("end", "Informe o horário final.")
+
+    start_time = end_time = None
+    if start and "start" not in errors:
+        try:
+            start_time = _str_to_time(start)
+        except Exception:
+            errors["start"] = "Use o formato HH:MM."
+    if end and "end" not in errors:
+        try:
+            end_time = _str_to_time(end)
+        except Exception:
+            errors["end"] = "Use o formato HH:MM."
+
+    try:
+        tz = ZoneInfo(tz_local)
+    except Exception:
+        errors["timezone"] = "Fuso horário inválido."
+        tz = ZoneInfo("America/Sao_Paulo")
+
+    if (
+        not errors
+        and weekday_int is not None
+        and start_time is not None
+        and end_time is not None
+    ):
+        if end_time <= start_time:
+            errors["end"] = "O horário final deve ser após o inicial."
+
+    if errors:
+        return _render_professional_availability(
+            request,
+            current_user,
+            db,
+            form=form,
+            errors=errors,
+        )
+
+    prof = _require_professional_for_user(db, current_user)
+    assert weekday_int is not None and start_time and end_time
+
+    start_utc = _time_local_to_utc_time_for_weekday(start_time, weekday_int, tz)
+    end_utc = _time_local_to_utc_time_for_weekday(end_time, weekday_int, tz)
+    if end_utc <= start_utc:
+        errors["end"] = (
+            "A janela fica inválida após converter o horário para UTC. Ajuste os horários."
+        )
+        return _render_professional_availability(
+            request,
+            current_user,
+            db,
+            form=form,
+            errors=errors,
+        )
+
+    existing = (
+        db.query(Availability)
+        .filter(
+            Availability.professional_id == prof.id,
+            Availability.weekday == weekday_int,
+        )
+        .all()
+    )
+    if _has_overlap(existing, start_utc, end_utc):
+        errors["start"] = "Há sobreposição com um intervalo existente."
+        return _render_professional_availability(
+            request,
+            current_user,
+            db,
+            form=form,
+            errors=errors,
+        )
+
+    row = Availability(
+        professional_id=prof.id,
+        weekday=weekday_int,
+        starts_utc=start_utc,
+        ends_utc=end_utc,
+    )
+    db.add(row)
+    db.flush()
+    record_audit(
+        db,
+        request=request,
+        user_id=current_user.id,
+        action="CREATE",
+        entity="availability",
+        entity_id=None,
+    )
+    db.commit()
+
+    redirect_url = request.url_for("professional_availability").include_query_params(
+        created="1"
+    )
+    return RedirectResponse(str(redirect_url), status_code=303)
+
+
+@router.post(
+    "/professional/availability/delete",
+    response_class=HTMLResponse,
+    name="professional_availability_delete",
+)
+def ui_professional_availability_delete(
+    request: Request,
+    current_user: User = Depends(require_roles(Role.PROFESSIONAL)),
+    db: Session = Depends(get_db),
+    weekday: str = Form(...),
+    start_utc: str = Form(...),
+):
+    flashes: list[dict[str, str]] = []
+
+    try:
+        weekday_int = int(weekday)
+        if weekday_int < 0 or weekday_int > 6:
+            raise ValueError
+    except Exception:
+        flashes.append(
+            {
+                "type": "danger",
+                "title": "Dia inválido",
+                "message": "Não foi possível identificar o dia selecionado.",
+            }
+        )
+        return _render_professional_availability(
+            request,
+            current_user,
+            db,
+            flashes=flashes,
+        )
+
+    try:
+        start_time_utc = _str_to_time(start_utc)
+    except Exception:
+        flashes.append(
+            {
+                "type": "danger",
+                "title": "Horário inválido",
+                "message": "Não foi possível identificar o horário informado.",
+            }
+        )
+        return _render_professional_availability(
+            request,
+            current_user,
+            db,
+            flashes=flashes,
+        )
+
+    prof = _require_professional_for_user(db, current_user)
+
+    row = (
+        db.query(Availability)
+        .filter(
+            Availability.professional_id == prof.id,
+            Availability.weekday == weekday_int,
+            Availability.starts_utc == start_time_utc,
+        )
+        .one_or_none()
+    )
+
+    if not row:
+        flashes.append(
+            {
+                "type": "danger",
+                "title": "Intervalo não encontrado",
+                "message": "O intervalo escolhido já pode ter sido removido.",
+            }
+        )
+        return _render_professional_availability(
+            request,
+            current_user,
+            db,
+            flashes=flashes,
+        )
+
+    db.delete(row)
+    record_audit(
+        db,
+        request=request,
+        user_id=current_user.id,
+        action="DELETE",
+        entity="availability",
+        entity_id=None,
+    )
+    db.commit()
+
+    redirect_url = request.url_for("professional_availability").include_query_params(
+        deleted="1"
+    )
+    return RedirectResponse(str(redirect_url), status_code=303)
 
 
 @router.get("/professional/reports", response_class=HTMLResponse)

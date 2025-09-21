@@ -2,6 +2,7 @@ import pytest
 from fastapi import status
 
 from app.core.security import create_access_token
+from app.models.availability import Availability
 from app.models.user import Role
 
 
@@ -208,3 +209,73 @@ def test_delete_availability(client, test_coordinator_user, test_professional):
     
     # Should either not find the entry (404) or succeed (204)
     assert response.status_code in [status.HTTP_404_NOT_FOUND, status.HTTP_204_NO_CONTENT]
+
+
+def _login(client, email: str, password: str) -> str:
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": email, "password": password},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    return response.json()["access_token"]
+
+
+def test_professional_availability_page(client, test_professional_user, test_professional):
+    token = _login(client, "professional@example.com", "TestPass123!")
+    response = client.get(
+        "/professional/availability",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == status.HTTP_200_OK
+    assert "Cadastrar disponibilidade" in response.text
+
+
+def test_professional_create_and_remove_availability(
+    client,
+    db_session,
+    test_professional_user,
+    test_professional,
+):
+    token = _login(client, "professional@example.com", "TestPass123!")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/professional/availability",
+        data={
+            "weekday": "0",
+            "start": "09:00",
+            "end": "11:00",
+            "tz_local": "America/Sao_Paulo",
+        },
+        headers=headers,
+        allow_redirects=False,
+    )
+    assert create_response.status_code == status.HTTP_303_SEE_OTHER
+
+    db_session.expire_all()
+    rows = (
+        db_session.query(Availability)
+        .filter(Availability.professional_id == test_professional.id)
+        .all()
+    )
+    assert len(rows) == 1
+    slot = rows[0]
+
+    delete_response = client.post(
+        "/professional/availability/delete",
+        data={
+            "weekday": str(slot.weekday),
+            "start_utc": slot.starts_utc.strftime("%H:%M"),
+        },
+        headers=headers,
+        allow_redirects=False,
+    )
+    assert delete_response.status_code == status.HTTP_303_SEE_OTHER
+
+    db_session.expire_all()
+    remaining = (
+        db_session.query(Availability)
+        .filter(Availability.professional_id == test_professional.id)
+        .count()
+    )
+    assert remaining == 0
