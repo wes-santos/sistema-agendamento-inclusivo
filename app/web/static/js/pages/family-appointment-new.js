@@ -7,6 +7,14 @@ document.addEventListener('DOMContentLoaded', function() {
   const slotsStatus = document.getElementById('slots-status');
   const serviceInput = document.getElementById('service');
   const locationSelect = document.getElementById('location');
+  const submitBtn = document.getElementById('submit-btn');
+  const appointmentForm = document.getElementById('appointment-form');
+  const confirmModal = document.getElementById('confirm-modal');
+  const confirmStudent = document.getElementById('confirm-student');
+  const confirmProfessional = document.getElementById('confirm-professional');
+  const confirmDate = document.getElementById('confirm-date');
+  const confirmTime = document.getElementById('confirm-time');
+  const confirmLocation = document.getElementById('confirm-location');
   
   // Simple test to see if the script is loading
   console.log('Family appointment new script loaded');
@@ -248,6 +256,60 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
+  // Show confirmation modal
+  function showConfirmationModal() {
+    // Get form values
+    const studentName = getSelectedOptionText('student_id');
+    const professionalName = getSelectedOptionText('professional_id');
+    const dateValue = dateInput ? dateInput.value : '';
+    const timeValue = timeSelect ? timeSelect.value : '';
+    const locationValue = locationSelect ? locationSelect.value : '';
+    
+    // Validate required fields
+    if (!studentName || !professionalName || !dateValue || !timeValue) {
+      alert('Por favor, preencha todos os campos obrigatórios.');
+      return;
+    }
+    
+    // Fill modal with appointment details
+    confirmStudent.textContent = studentName;
+    confirmProfessional.textContent = professionalName;
+    confirmDate.textContent = dateValue;
+    confirmTime.textContent = timeValue;
+    confirmLocation.textContent = locationValue;
+    
+    // Show modal
+    if (confirmModal) {
+      confirmModal.showModal();
+    }
+  }
+  
+  // Get selected option text from a select element
+  function getSelectedOptionText(selectId) {
+    const select = document.getElementById(selectId);
+    if (select && select.selectedIndex >= 0) {
+      return select.options[select.selectedIndex].text;
+    }
+    return '';
+  }
+  
+  // Handle modal confirm button
+  function handleModalConfirm() {
+    if (confirmModal) {
+      confirmModal.close();
+    }
+    if (appointmentForm) {
+      appointmentForm.submit();
+    }
+  }
+  
+  // Handle modal close button
+  function handleModalClose() {
+    if (confirmModal) {
+      confirmModal.close();
+    }
+  }
+  
   // Event listeners
   if (loadSlotsBtn) {
     loadSlotsBtn.addEventListener('click', loadAvailableSlots);
@@ -263,6 +325,33 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       if (slotsStatus) {
         slotsStatus.textContent = '';
+      }
+    });
+  }
+  
+  // Submit button event listener
+  if (submitBtn) {
+    submitBtn.addEventListener('click', showConfirmationModal);
+  }
+  
+  // Modal event listeners
+  if (confirmModal) {
+    // Handle confirm button
+    const confirmButtons = confirmModal.querySelectorAll('[data-modal-confirm]');
+    confirmButtons.forEach(button => {
+      button.addEventListener('click', handleModalConfirm);
+    });
+    
+    // Handle close button
+    const closeButtons = confirmModal.querySelectorAll('[data-modal-close]');
+    closeButtons.forEach(button => {
+      button.addEventListener('click', handleModalClose);
+    });
+    
+    // Close modal when clicking on backdrop
+    confirmModal.addEventListener('click', function(e) {
+      if (e.target === confirmModal) {
+        handleModalClose();
       }
     });
   }
