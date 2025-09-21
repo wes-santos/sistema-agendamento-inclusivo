@@ -239,7 +239,6 @@ def _render_coordination_reports(
     else:
         date_from = parse_iso(filters.get("date_from")) or default_from
         date_to = parse_iso(filters.get("date_to")) or today
-
     group_by = filters.get("group_by") or "day"
     service_id = filters.get("service_id") or None
     professional_id = filters.get("professional_id") or None
