@@ -2,19 +2,26 @@ from __future__ import annotations
 
 import secrets
 from datetime import datetime, timedelta
+from urllib.parse import quote_plus
 
-from fastapi import APIRouter, Depends, Form, Query, Request, Response, Body
+from fastapi import APIRouter, Body, Depends, Form, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
 from app.db.session import get_db
 from app.models.user import Role, User
+from app.models.professional import Professional
 from app.web.templating import render
 from app.core.settings import settings
 from app.core.security import (
     create_access_token,
     create_refresh_token,
+    hash_password,
+    validate_password_policy,
     verify_password,
 )
+from app.email.render import render as render_email
+from app.services.mailer import send_email
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 router = APIRouter()
@@ -114,8 +121,25 @@ def login_get(
     request: Request,
     next: str = Query("/", alias="next"),
     demo: bool = Query(False),
+    registered: bool = Query(False),
 ):
-    ctx = {"next": next, "form": {"email": "familia@demo" if demo else ""}}
+    flashes: list[dict] = []
+    if registered:
+        flashes.append(
+            {
+                "type": "success",
+                "title": "Cadastro concluído",
+                "message": "Sua conta foi criada. Entre com suas credenciais.",
+            }
+        )
+
+    prefill_email = request.query_params.get("email") or ("familia@demo" if demo else "")
+
+    ctx = {
+        "next": next,
+        "form": {"email": prefill_email},
+        "flashes": flashes,
+    }
     return render(request, "pages/auth/login.html", ctx)
 
 
@@ -235,6 +259,126 @@ def login_post(
         **cookie_kwargs,
     )
     return redirect
+
+
+def _role_options() -> list[dict[str, str]]:
+    return [
+        {"value": Role.FAMILY.value, "label": "Responsável (Família)"},
+        {"value": Role.PROFESSIONAL.value, "label": "Profissional"},
+    ]
+
+
+@router.get("/register", response_class=HTMLResponse, name="auth_register_get")
+def register_get(request: Request) -> HTMLResponse:
+    ctx = {
+        "role_options": _role_options(),
+        "form": {"name": "", "email": "", "role": Role.FAMILY.value, "specialty": ""},
+        "errors": {},
+    }
+    return render(request, "pages/auth/register.html", ctx)
+
+
+@router.post("/register", response_class=HTMLResponse, name="auth_register_post")
+def register_post(
+    request: Request,
+    name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+    role: str = Form(...),
+    specialty: str | None = Form(None),
+    db: Session = Depends(get_db),
+):
+    name_clean = (name or "").strip()
+    email_clean = (email or "").strip().lower()
+    role_value = (role or "").strip().upper()
+    specialty_clean = (specialty or "").strip() or None
+
+    form_data = {
+        "name": name_clean,
+        "email": email_clean,
+        "role": role_value,
+        "specialty": specialty_clean or "",
+    }
+    errors: dict[str, str] = {}
+
+    if not name_clean:
+        errors["name"] = "Informe o nome completo."
+
+    if not email_clean:
+        errors["email"] = "Informe o e-mail."
+
+    allowed_roles = {Role.FAMILY.value, Role.PROFESSIONAL.value}
+    if role_value not in allowed_roles:
+        errors["role"] = "Selecione um perfil válido."
+
+    if not password:
+        errors["password"] = "Informe uma senha."
+    elif password != password_confirm:
+        errors["password_confirm"] = "As senhas não coincidem."
+    else:
+        try:
+            validate_password_policy(password)
+        except ValueError as exc:
+            errors["password"] = str(exc)
+
+    if errors:
+        ctx = {
+            "role_options": _role_options(),
+            "form": form_data,
+            "errors": errors,
+        }
+        return render(request, "pages/auth/register.html", ctx)
+
+    password_hash = hash_password(password)
+    role_enum = Role(role_value)
+
+    user = User(
+        name=name_clean,
+        email=email_clean,
+        password_hash=password_hash,
+        role=role_enum,
+        is_active=True,
+    )
+    db.add(user)
+
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        errors["email"] = "Já existe uma conta com este e-mail."
+        ctx = {
+            "role_options": _role_options(),
+            "form": form_data,
+            "errors": errors,
+        }
+        return render(request, "pages/auth/register.html", ctx)
+
+    if role_enum == Role.PROFESSIONAL:
+        professional = Professional(
+            name=name_clean,
+            user_id=user.id,
+            speciality=specialty_clean,
+            is_active=True,
+        )
+        db.add(professional)
+
+    db.commit()
+
+    login_url = request.url_for("auth_login_get")
+    try:
+        html = render_email("welcome.html").render(
+            {"name": name_clean, "email": email_clean, "login_url": login_url}
+        )
+        send_email("[SAI] Boas-vindas", [email_clean], html, text=None)
+    except Exception as email_error:  # pragma: no cover - best effort
+        print(f"Failed to send welcome email: {email_error}")
+
+    email_param = quote_plus(email_clean)
+    return RedirectResponse(
+        url=f"/login?registered=1&email={email_param}",
+        status_code=303,
+    )
 
 
 @router.get("/logout", name="auth_logout")

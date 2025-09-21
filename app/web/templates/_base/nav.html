@@ -28,6 +28,26 @@ Regras de exibição por perfil:
                         Meus agendamentos
                     </a>
                 </li>
+                <li class="nav__item">
+                    <a href="/family/students"
+                        class="nav__link {{ 'is-active' if path.startswith('/family/students') else '' }}"
+                        aria-current="{{ 'page' if path.startswith('/family/students') else '' }}">
+                        Alunos
+                    </a>
+                </li>
+                {% endif %}
+
+                {# Estudante #}
+                {% if (current_user is defined) and (
+                ('STUDENT' in (current_user.roles or [])) or (current_user.role|default('') == 'STUDENT')
+                ) %}
+                <li class="nav__item">
+                    <a href="/student/dashboard"
+                        class="nav__link {{ 'is-active' if path.startswith('/student/dashboard') else '' }}"
+                        aria-current="{{ 'page' if path.startswith('/student/dashboard') else '' }}">
+                        Meu painel
+                    </a>
+                </li>
                 {% endif %}
 
                 {# Profissional #}

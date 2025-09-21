@@ -24,7 +24,7 @@ from app.deps import get_current_user
 from app.middlewares.telemetry import RequestContextMiddleware
 from app.models.user import Role, User
 from app.version import APP_VERSION, BUILD_TIME_UTC, GIT_SHA
-from app.web.routes import auth, coordination, family, professional
+from app.web.routes import auth, coordination, family, professional, student
 from app.api.v1 import public_appointments
 from app.web.templating import templates
 
@@ -131,6 +131,7 @@ app.include_router(test_router)
 app.include_router(family.router)
 app.include_router(professional.router)
 app.include_router(coordination.router)
+app.include_router(student.router)
 app.include_router(auth.router)
 
 
@@ -183,4 +184,6 @@ def home_redirect(
         return RedirectResponse("/professional/dashboard", status_code=303)
     if current_user.role == Role.COORDINATION:
         return RedirectResponse("/coordination/dashboard", status_code=303)
+    if current_user.role == Role.STUDENT:
+        return RedirectResponse("/student/dashboard", status_code=303)
     return RedirectResponse("/login", status_code=303)

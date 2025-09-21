@@ -8,8 +8,10 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request
 from fastapi.params import Query as QueryParam
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.security import hash_password, validate_password_policy
 from app.core.settings import settings
 from app.db import get_db
 from app.deps import require_roles
@@ -360,6 +362,128 @@ def ui_family_new_appointment(
     }
     
     return render(request, "pages/family/appointment_new.html", context)
+
+
+@router.get("/family/students", response_class=HTMLResponse, name="family_students")
+def ui_family_students(
+    request: Request,
+    current_user: User = Depends(require_roles(Role.FAMILY)),
+    db: Session = Depends(get_db),
+    created: bool = Query(False),
+):
+    flashes: list[dict[str, str]] = []
+    if created:
+        flashes.append(
+            {
+                "type": "success",
+                "title": "Aluno cadastrado",
+                "message": "O aluno foi cadastrado e vinculado ao seu perfil.",
+            }
+        )
+
+    return _render_students_page(
+        request,
+        db,
+        current_user,
+        form={"name": "", "email": ""},
+        errors={},
+        flashes=flashes,
+    )
+
+
+@router.post("/family/students", response_class=HTMLResponse, name="family_students_create")
+def ui_family_students_create(
+    request: Request,
+    name: str = Form(...),
+    email: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+    current_user: User = Depends(require_roles(Role.FAMILY)),
+    db: Session = Depends(get_db),
+):
+    name_clean = (name or "").strip()
+    email_clean = (email or "").strip().lower()
+
+    form_data = {"name": name_clean, "email": email_clean}
+    errors: dict[str, str] = {}
+
+    if not name_clean:
+        errors["name"] = "Informe o nome do aluno."
+
+    if not email_clean:
+        errors["email"] = "Informe um e-mail válido."
+
+    if not password:
+        errors["password"] = "Informe uma senha."
+    elif password != password_confirm:
+        errors["password_confirm"] = "As senhas não coincidem."
+    else:
+        try:
+            validate_password_policy(password)
+        except ValueError as exc:
+            errors["password"] = str(exc)
+
+    if errors:
+        return _render_students_page(
+            request,
+            db,
+            current_user,
+            form=form_data,
+            errors=errors,
+            flashes=[],
+        )
+
+    password_hash = hash_password(password)
+
+    user = User(
+        name=name_clean,
+        email=email_clean,
+        password_hash=password_hash,
+        role=Role.STUDENT,
+        is_active=True,
+    )
+    db.add(user)
+
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        errors["email"] = "Já existe uma conta com este e-mail."
+        return _render_students_page(
+            request,
+            db,
+            current_user,
+            form=form_data,
+            errors=errors,
+            flashes=[],
+        )
+
+    student = Student(
+        name=name_clean,
+        guardian_user_id=current_user.id,
+        user_id=user.id,
+    )
+    db.add(student)
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        errors["email"] = "Não foi possível concluir o cadastro. Tente novamente."  # generic
+        print(f"Failed to create student: {exc}")
+        return _render_students_page(
+            request,
+            db,
+            current_user,
+            form=form_data,
+            errors=errors,
+            flashes=[],
+        )
+
+    return RedirectResponse(
+        url=f"/family/students?created=1",
+        status_code=303,
+    )
 
 
 # GET AVAILABLE SLOTS FOR A PROFESSIONAL ON A DATE
@@ -953,6 +1077,52 @@ def ui_family_appointments(
             "trail": trail,
         },
     )
+
+
+def _render_students_page(
+    request: Request,
+    db: Session,
+    current_user: User,
+    *,
+    form: dict[str, str],
+    errors: dict[str, str],
+    flashes: list[dict[str, str]] | None,
+):
+    students = (
+        db.query(Student)
+        .options(joinedload(Student.user))
+        .filter(Student.guardian_user_id == current_user.id)
+        .order_by(Student.name.asc())
+        .all()
+    )
+
+    items = []
+    tz = ZoneInfo("America/Sao_Paulo")
+    for student in students:
+        created_at = student.created_at
+        created_local = (
+            created_at.astimezone(tz).strftime("%d/%m/%Y %H:%M")
+            if created_at
+            else ""
+        )
+        items.append(
+            {
+                "id": student.id,
+                "name": student.name,
+                "email": getattr(student.user, "email", ""),
+                "created_at": created_local,
+            }
+        )
+
+    ctx = {
+        "current_user": current_user,
+        "students": items,
+        "form": form,
+        "errors": errors,
+        "flashes": flashes or [],
+        "trail": [("/", "Início"), ("/family/students", "Alunos")],
+    }
+    return render(request, "pages/family/students.html", ctx)
 
 
 def _send_appointment_booking_email(

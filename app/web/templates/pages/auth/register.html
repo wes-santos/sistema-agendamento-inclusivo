@@ -1,0 +1,80 @@
+{% extends "_base/base.html" %}
+{% set body_class = 'page-auth page-auth-register' %}
+
+{% from "components/card.html" import card %}
+{% from "components/form_field.html" import input_text, select %}
+
+{% block title %}Criar conta{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/20-pages/auth.css') }}?v={{ app_version|default('1') }}">
+{% endblock %}
+
+{% block content %}
+<section class="auth-wrap">
+  {% call card(title="Cadastre-se", subtitle="Crie sua conta para acessar o sistema") %}
+  <form method="post" action="{{ url_for('auth_register_post') }}" class="auth-form" novalidate>
+    {{ input_text(
+      name="name",
+      label="Nome completo",
+      value=form.name,
+      required=True,
+      autocomplete="name",
+      error=errors.get('name')
+    ) }}
+
+    {{ input_text(
+      name="email",
+      type="email",
+      label="E-mail",
+      value=form.email,
+      required=True,
+      autocomplete="email",
+      error=errors.get('email')
+    ) }}
+
+    {{ select(
+      name="role",
+      label="Perfil",
+      options=role_options,
+      value=form.role,
+      required=True,
+      help_text="Disponível apenas para responsáveis (família) ou profissionais.",
+      error=errors.get('role')
+    ) }}
+
+    {{ input_text(
+      name="specialty",
+      label="Área de atuação (opcional)",
+      value=form.specialty,
+      help_text="Informe caso esteja se cadastrando como profissional.",
+      error=errors.get('specialty')
+    ) }}
+
+    {{ input_text(
+      name="password",
+      type="password",
+      label="Senha",
+      required=True,
+      autocomplete="new-password",
+      help_text="Mínimo 8 caracteres, incluindo maiúsculas, minúsculas, número e símbolo.",
+      error=errors.get('password')
+    ) }}
+
+    {{ input_text(
+      name="password_confirm",
+      type="password",
+      label="Confirme a senha",
+      required=True,
+      autocomplete="new-password",
+      error=errors.get('password_confirm')
+    ) }}
+
+    <div class="auth-actions">
+      <button class="btn" type="submit">Criar conta</button>
+      <a class="btn btn--ghost" href="{{ url_for('auth_login_get') }}">Voltar</a>
+    </div>
+  </form>
+  {% endcall %}
+</section>
+{% endblock %}
