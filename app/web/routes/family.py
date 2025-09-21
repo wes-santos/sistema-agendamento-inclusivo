@@ -11,6 +11,7 @@ from sqlalchemy import and_, func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from app.audit.helpers import record_audit
 from app.core.security import hash_password, validate_password_policy
 from app.core.settings import settings
 from app.db import get_db
@@ -400,6 +401,15 @@ def ui_family_students_create(
     db.add(student)
 
     try:
+        db.flush()
+        record_audit(
+            db,
+            request=request,
+            user_id=current_user.id,
+            action="CREATE",
+            entity="student",
+            entity_id=student.id,
+        )
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -555,6 +565,15 @@ def ui_family_create_appointment(
         confirm_token = cancel_token = None
         confirm_token, cancel_token = create_tokens_for_appointment(
             db, appointment, current_user.email
+        )
+
+        record_audit(
+            db,
+            request=request,
+            user_id=current_user.id,
+            action="CREATE",
+            entity="appointment",
+            entity_id=appointment.id,
         )
 
         db.commit()

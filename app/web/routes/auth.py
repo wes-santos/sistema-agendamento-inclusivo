@@ -7,6 +7,7 @@ from urllib.parse import quote_plus
 from fastapi import APIRouter, Body, Depends, Form, Query, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 
+from app.audit.helpers import record_audit
 from app.db.session import get_db
 from app.models.user import Role, User
 from app.models.professional import Professional
@@ -176,6 +177,16 @@ def login_post(
     # JWTs
     access = create_access_token(str(user["id"]))
     refresh = create_refresh_token(str(user["id"]))
+
+    record_audit(
+        db,
+        request=request,
+        user_id=user["id"],
+        action="LOGIN",
+        entity="auth",
+        entity_id=user["id"],
+        autocommit=True,
+    )
 
     # If client wants JSON (API usage), return tokens instead of redirect
     accept = (request.headers.get("accept") or "").lower()
@@ -347,6 +358,7 @@ def register_post(
         }
         return render(request, "pages/auth/register.html", ctx)
 
+    professional = None
     if role_enum == Role.PROFESSIONAL:
         professional = Professional(
             name=name_clean,
@@ -355,6 +367,25 @@ def register_post(
             is_active=True,
         )
         db.add(professional)
+        db.flush()
+
+    record_audit(
+        db,
+        request=request,
+        user_id=user.id,
+        action="REGISTER",
+        entity="user",
+        entity_id=user.id,
+    )
+    if professional is not None:
+        record_audit(
+            db,
+            request=request,
+            user_id=user.id,
+            action="CREATE",
+            entity="professional",
+            entity_id=professional.id,
+        )
 
     db.commit()
 
@@ -375,7 +406,14 @@ def register_post(
 
 
 @router.get("/logout", name="auth_logout")
-def logout(request: Request, next: str = "/login"):
+def logout(
+    request: Request,
+    next: str = "/login",
+    db: Session = Depends(get_db),
+):
+    # Captura dados da sessão antes de limpá-la para auditoria
+    session_data = _get_user_from_cookie(request)
+
     # Limpa cookie na resposta de redirect e tenta invalidar o token em memória
     target = next or "/login"
     # apenas caminhos relativos seguros
@@ -393,6 +431,17 @@ def logout(request: Request, next: str = "/login"):
     # Remove também cookies de JWT se existirem
     for k in ("access_token", "refresh_token"):
         redirect.delete_cookie(k, path="/")
+
+    user_id = session_data.get("user_id") if session_data else None
+    record_audit(
+        db,
+        request=request,
+        user_id=user_id,
+        action="LOGOUT",
+        entity="auth",
+        entity_id=user_id,
+        autocommit=True,
+    )
     return redirect
 
 
