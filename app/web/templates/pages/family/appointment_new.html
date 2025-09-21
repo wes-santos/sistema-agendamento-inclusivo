@@ -51,6 +51,7 @@
         option_value="id",
         option_label="name",
         value=(form_data.professional_id if form_data is defined else ''),
+        placeholder="Selecione um profissional",
         required=True
       ) }}
       
@@ -97,7 +98,7 @@
       <div class="field">
         <label class="field__label" for="location">Local</label>
         <div class="field__control">
-          <select id="location" name="location" class="select" disabled>
+          <select id="location" name="location" class="select">
             <option value="">Selecione um profissional primeiro</option>
           </select>
         </div>

@@ -415,13 +415,29 @@ def ui_family_create_appointment(
     student_id: int = Form(...),
     professional_id: int = Form(...),
     service: str = Form(...),
-    date: str = Form(...),  # Now accepts DD/MM/YYYY format
+    date_str: str = Form(..., alias="date"),  # Now accepts DD/MM/YYYY format
     time: str = Form(...),
     location: str = Form(None),
     current_user: User = Depends(require_roles(Role.FAMILY)),
     db: Session = Depends(get_db),
 ):
     try:
+        # Validate form fields
+        if not student_id:
+            raise HTTPException(400, "Por favor, selecione um aluno.")
+        
+        if not professional_id:
+            raise HTTPException(400, "Por favor, selecione um profissional.")
+            
+        if not service:
+            raise HTTPException(400, "Por favor, informe o serviço.")
+            
+        if not date_str:
+            raise HTTPException(400, "Por favor, informe a data.")
+            
+        if not time:
+            raise HTTPException(400, "Por favor, informe o horário.")
+        
         # Validate that the student belongs to this family
         student = db.query(Student).filter(
             Student.id == student_id,
@@ -444,7 +460,7 @@ def ui_family_create_appointment(
         tz = ZoneInfo("America/Sao_Paulo")
         try:
             # Parse DD/MM/YYYY format
-            day, month, year = map(int, date.split('/'))
+            day, month, year = map(int, date_str.split('/'))
             appointment_date = date(year, month, day)
             appointment_time = datetime.strptime(time, "%H:%M").time()
             start_datetime_local = datetime.combine(appointment_date, appointment_time, tzinfo=tz)
@@ -512,12 +528,12 @@ def ui_family_create_appointment(
             "students": students,
             "professionals": professional_options,
             "services": [{"id": s, "name": s} for s in services] if services else [],
-            "error": "Erro ao criar agendamento. Por favor, tente novamente.",
+            "error": f"Erro ao criar agendamento: {str(e)}. Por favor, tente novamente.",
             "form_data": {
                 "student_id": student_id,
                 "professional_id": professional_id,
                 "service": service,
-                "date": date,
+                "date": date_str,
                 "time": time,
                 "location": location,
             }

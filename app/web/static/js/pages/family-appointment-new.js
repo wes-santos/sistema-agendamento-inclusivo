@@ -64,10 +64,9 @@ document.addEventListener('DOMContentLoaded', function() {
         option.textContent = professionalData[professionalId].location;
         locationSelect.appendChild(option);
         locationSelect.value = professionalData[professionalId].location;
-        locationSelect.disabled = false;
       } else if (locationSelect) {
         locationSelect.innerHTML = '<option value="">Selecione um profissional primeiro</option>';
-        locationSelect.disabled = true;
+        locationSelect.value = '';
       }
     });
   }
