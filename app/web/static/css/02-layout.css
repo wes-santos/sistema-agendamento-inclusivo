@@ -130,7 +130,22 @@
   padding: 1rem 0;
 }
 .footer__copy {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.footer__copy p {
   margin: 0;
+}
+.footer__link {
+  color: var(--text);
+  text-decoration: none;
+}
+.footer__link:hover {
+  text-decoration: underline;
 }
 
 /* Breadcrumbs (estilo mínimo; pode evoluir para components/breadcrumbs.css) */

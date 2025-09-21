@@ -256,6 +256,16 @@ def register_get(request: Request) -> HTMLResponse:
     return render(request, "pages/auth/register.html", ctx)
 
 
+@router.get("/lgpd-consent", response_class=HTMLResponse, name="lgpd_consent")
+def lgpd_consent(request: Request) -> HTMLResponse:
+    current = get_current_user_optional(request)
+    return render(
+        request,
+        "pages/public/lgpd_consent.html",
+        {"current_user": current},
+    )
+
+
 @router.post("/register", response_class=HTMLResponse, name="auth_register_post")
 def register_post(
     request: Request,
