@@ -78,6 +78,12 @@
   grid-template-columns: 1fr; /* mobile: 1 por linha */
   gap: 0.5rem;
 }
+.page-family.page-family-dashboard .quick-actions__primary {
+  --_bg: color-mix(in oklab, var(--brand) 6%, var(--surface-2));
+  --_fg: color-mix(in oklab, var(--text) 92%, var(--brand) 18%);
+  --_bd: color-mix(in oklab, var(--brand) 18%, var(--border));
+  font-weight: 600;
+}
 @media (min-width: 600px) {
   .page-family.page-family-dashboard .quick-actions {
     grid-template-columns: repeat(
