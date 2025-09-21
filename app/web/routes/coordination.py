@@ -317,17 +317,20 @@ def _render_coordination_reports(
             .group_by(dtexpr)
             .order_by(dtexpr)
         )
-        rows = [
-            {
-                "label": rec.d.astimezone(tz).date().strftime("%d/%m/%Y"),
-                "scheduled": int(rec.scheduled or 0),
-                "confirmed": int(rec.confirmed or 0),
-                "attended": int(rec.attended or 0),
-                "canceled": int(rec.canceled or 0),
-                "no_show": 0,
-            }
-            for rec in day_query
-        ]
+        rows = []
+        for rec in day_query:
+            local_dt = rec.d.astimezone(tz)
+            label = local_dt.strftime("%d/%m/%Y")
+            rows.append(
+                {
+                    "label": label,
+                    "scheduled": int(rec.scheduled or 0),
+                    "confirmed": int(rec.confirmed or 0),
+                    "attended": int(rec.attended or 0),
+                    "canceled": int(rec.canceled or 0),
+                    "no_show": 0,
+                }
+            )
     elif group_by == "service":
         svc_query = (
             db.query(
@@ -353,17 +356,19 @@ def _render_coordination_reports(
             .group_by(Appointment.service)
             .order_by(Appointment.service)
         )
-        rows = [
-            {
-                "label": rec.label or "(sem descrição)",
-                "scheduled": int(rec.scheduled or 0),
-                "confirmed": int(rec.confirmed or 0),
-                "attended": int(rec.attended or 0),
-                "canceled": int(rec.canceled or 0),
-                "no_show": 0,
-            }
-            for rec in svc_query
-        ]
+        rows = []
+        for rec in svc_query:
+            label = rec.label or "(sem descrição)"
+            rows.append(
+                {
+                    "label": label,
+                    "scheduled": int(rec.scheduled or 0),
+                    "confirmed": int(rec.confirmed or 0),
+                    "attended": int(rec.attended or 0),
+                    "canceled": int(rec.canceled or 0),
+                    "no_show": 0,
+                }
+            )
     else:  # professional
         prof_query = (
             db.query(
@@ -390,17 +395,19 @@ def _render_coordination_reports(
             .group_by(Professional.name)
             .order_by(Professional.name)
         )
-        rows = [
-            {
-                "label": rec.label or "(profissional)",
-                "scheduled": int(rec.scheduled or 0),
-                "confirmed": int(rec.confirmed or 0),
-                "attended": int(rec.attended or 0),
-                "canceled": int(rec.canceled or 0),
-                "no_show": 0,
-            }
-            for rec in prof_query
-        ]
+        rows = []
+        for rec in prof_query:
+            label = rec.label or "(profissional)"
+            rows.append(
+                {
+                    "label": label,
+                    "scheduled": int(rec.scheduled or 0),
+                    "confirmed": int(rec.confirmed or 0),
+                    "attended": int(rec.attended or 0),
+                    "canceled": int(rec.canceled or 0),
+                    "no_show": 0,
+                }
+            )
 
     persist_query = urlencode(
         {

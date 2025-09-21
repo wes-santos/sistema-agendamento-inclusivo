@@ -495,16 +495,19 @@ def _render_professional_reports(
                 .order_by(dtexpr)
                 .all()
             )
-            rows = [
-                {
-                    "label": r.label.astimezone(tz).date().strftime("%d/%m/%Y"),
-                    "scheduled": int(r.scheduled or 0),
-                    "confirmed": int(r.confirmed or 0),
-                    "attended": int(r.attended or 0),
-                    "canceled": int(r.canceled or 0),
-                }
-                for r in rows_raw
-            ]
+            rows = []
+            for r in rows_raw:
+                local_date = r.label.astimezone(tz).date()
+                label = local_date.strftime("%d/%m/%Y")
+                rows.append(
+                    {
+                        "label": label,
+                        "scheduled": int(r.scheduled or 0),
+                        "confirmed": int(r.confirmed or 0),
+                        "attended": int(r.attended or 0),
+                        "canceled": int(r.canceled or 0),
+                    }
+                )
         else:  # service
             rows_raw = (
                 db.query(
@@ -531,16 +534,18 @@ def _render_professional_reports(
                 .order_by(Appointment.service)
                 .all()
             )
-            rows = [
-                {
-                    "label": r.label or "(sem descrição)",
-                    "scheduled": int(r.scheduled or 0),
-                    "confirmed": int(r.confirmed or 0),
-                    "attended": int(r.attended or 0),
-                    "canceled": int(r.canceled or 0),
-                }
-                for r in rows_raw
-            ]
+            rows = []
+            for r in rows_raw:
+                label = r.label or "(sem descrição)"
+                rows.append(
+                    {
+                        "label": label,
+                        "scheduled": int(r.scheduled or 0),
+                        "confirmed": int(r.confirmed or 0),
+                        "attended": int(r.attended or 0),
+                        "canceled": int(r.canceled or 0),
+                    }
+                )
 
     ctx = {
         "current_user": current_user,
