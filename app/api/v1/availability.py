@@ -398,7 +398,7 @@ def delete_availability(
             and_(
                 Availability.professional_id == professional_id,
                 Availability.weekday == weekday,
-                Availability.start_utc == s_utc,
+                Availability.starts_utc == s_utc,
             )
         )
         .first()

@@ -71,4 +71,6 @@ def iso_utc(dt: datetime) -> str:
     """
     Serializa em ISO 8601 sempre em UTC com sufixo 'Z'.
     """
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
     return ensure_aware_utc(dt).astimezone(UTC).isoformat().replace("+00:00", "Z")

@@ -34,7 +34,7 @@ def test_create_student_as_family(client, test_user):
     assert data["guardian_user_id"] == test_user.id
 
 
-def test_create_student_as_coordinator(client, test_coordinator_user):
+def test_create_student_as_coordinator(client, test_coordinator_user, test_user):
     """Test creating a student as a coordinator user."""
     # Login as coordinator to get token
     login_response = client.post(

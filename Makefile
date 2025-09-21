@@ -2,7 +2,7 @@
 # Config
 # ------------------------------
 DC ?= docker compose
-COMPOSE_FILE ?= docker-compose.dev.yml
+COMPOSE_FILE ?= docker-compose.yml
 SERVICE ?= api
 DB_SERVICE ?= db
 ENV_FILE ?= .env.dev
@@ -40,6 +40,7 @@ help:
 	@echo "  make cron-up       -> sobe reminder-cron"
 	@echo "  make logs-cron     -> logs do reminder-cron"
 	@echo "  make clean         -> remove .venv local e cache poetry (host)"
+	@echo "  make run-tests     -> executa os testes do projeto utilizando pytest"
 
 .PHONY: up
 up:
@@ -78,6 +79,10 @@ run-script:
 run-module:
 	@if [ -z "$(MOD)" ]; then echo "Use: make run-module MOD=app.jobs.remind_t24 [ARGS='...']"; exit 1; fi
 	$(DC) -f $(API_COMPOSE_FILE) run --rm $(SERVICE) python -m $(MOD) $(ARGS)
+
+.PHONY: run-tests
+run-tests:
+	$(DC) -f $(COMPOSE_FILE) exec $(SERVICE) pytest -v
 
 .PHONY: seed
 seed:

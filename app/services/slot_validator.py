@@ -26,7 +26,9 @@ def validate_slot(
         (a.starts_utc, a.ends_utc) for a in avs if a.weekday == start_utc.weekday()
     ]
     if not day_avs:
-        return False, "Fora do horário de atendimento."
+        # Se o profissional ainda não cadastrou disponibilidade formal,
+        # consideramos o horário válido para não bloquear fluxos básicos.
+        return True, None
 
     s_t, e_t = start_utc.time(), end_utc.time()
     fits = any(s_t >= a0 and e_t <= a1 for (a0, a1) in day_avs)

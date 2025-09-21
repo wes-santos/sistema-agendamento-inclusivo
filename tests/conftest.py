@@ -17,53 +17,12 @@ from app.models.student import Student
 from app.models.professional import Professional
 from app.models.appointment import Appointment, AppointmentStatus
 from app.models.availability import Availability
+from app.models.audit_log import AuditLog
 from app.core.security import hash_password
 
 
-# Patch the audit_log module to use String instead of INET for SQLite compatibility
-import app.models.audit_log
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String as SQLString
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-# Replace the AuditLog class with a SQLite-compatible version
-# Create a new Base for testing to avoid conflicts with existing metadata
-from sqlalchemy.orm import registry
-
-# Create a new registry for testing
-testing_registry = registry()
-
-class MockAuditLog(testing_registry.generate_base()):
-    __tablename__ = "audit_logs"
-    __table_args__ = (
-        Index("ix_audit_timestamp_utc", "timestamp_utc"),
-        Index("ix_audit_user_id", "user_id"),
-        {'extend_existing': True}
-    )
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), index=True
-    )
-    action: Mapped[str] = mapped_column(
-        SQLString(80), nullable=False
-    )  # e.g. "CREATE","UPDATE","LOGIN"
-    entity: Mapped[str] = mapped_column(
-        SQLString(80), nullable=False
-    )  # e.g. "appointment","student"
-    entity_id: Mapped[int | None] = mapped_column(Integer)
-    timestamp_utc: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    ip: Mapped[str | None] = mapped_column(SQLString(45))  # Use String instead of INET
-
-    user = relationship("User")
-
-# Replace the AuditLog class in the module
-app.models.audit_log.AuditLog = MockAuditLog
-
-
 # Create an in-memory SQLite database for testing
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def engine():
     """Create an in-memory SQLite database for testing."""
     engine = create_engine(
@@ -76,7 +35,7 @@ def engine():
     Base.metadata.drop_all(bind=engine)
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def TestingSessionLocal(engine):
     """Create a session factory for the test database."""
     return sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
@@ -86,12 +45,14 @@ def TestingSessionLocal(engine):
 @pytest.fixture
 def override_get_db(TestingSessionLocal):
     """Override the database dependency to use our test database."""
+
     def _override_get_db():
         session = TestingSessionLocal()
         try:
             yield session
         finally:
             session.close()
+
     return _override_get_db
 
 
@@ -116,6 +77,14 @@ def client(override_get_db):
     app.dependency_overrides[get_db] = override_get_db
     
     with TestClient(app) as client:
+        original_post = client.post
+
+        def post_with_allow_redirects(*args, **kwargs):
+            if "allow_redirects" in kwargs and "follow_redirects" not in kwargs:
+                kwargs["follow_redirects"] = kwargs.pop("allow_redirects")
+            return original_post(*args, **kwargs)
+
+        client.post = post_with_allow_redirects  # type: ignore[assignment]
         yield client
     
     # Clear overrides after test
@@ -125,6 +94,10 @@ def client(override_get_db):
 @pytest.fixture
 def test_user(db_session):
     """Create a test user for authentication tests."""
+    existing = db_session.query(User).filter_by(email="test@example.com").first()
+    if existing:
+        return existing
+
     user = User(
         name="Test User",
         email="test@example.com",
@@ -141,6 +114,14 @@ def test_user(db_session):
 @pytest.fixture
 def test_professional_user(db_session):
     """Create a test professional user."""
+    existing = (
+        db_session.query(User)
+        .filter_by(email="professional@example.com")
+        .first()
+    )
+    if existing:
+        return existing
+
     user = User(
         name="Professional User",
         email="professional@example.com",
@@ -157,6 +138,14 @@ def test_professional_user(db_session):
 @pytest.fixture
 def test_coordinator_user(db_session):
     """Create a test coordinator user."""
+    existing = (
+        db_session.query(User)
+        .filter_by(email="coordinator@example.com")
+        .first()
+    )
+    if existing:
+        return existing
+
     user = User(
         name="Coordinator User",
         email="coordinator@example.com",
@@ -186,6 +175,14 @@ def test_student(db_session, test_user):
 @pytest.fixture
 def test_professional(db_session, test_professional_user):
     """Create a test professional."""
+    professional = (
+        db_session.query(Professional)
+        .filter_by(user_id=test_professional_user.id)
+        .first()
+    )
+    if professional:
+        return professional
+
     professional = Professional(
         name="Test Professional",
         speciality="Test Speciality",

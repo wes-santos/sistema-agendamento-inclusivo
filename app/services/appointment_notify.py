@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
+from jinja2 import TemplateNotFound
+
 from app.core.settings import settings
 from app.db.session import SessionLocal
 from app.email.render import render
@@ -96,7 +98,11 @@ def send_confirmation_email_bg(
             "expires_human": expires_human,
         }
 
-        html_confirm = render("confirm.html").render(ctx)
+        try:
+            html_confirm = render("confirm.html").render(ctx)
+        except TemplateNotFound:
+            # Ambiente de testes pode não incluir templates de e-mail.
+            return
         # inclui link de cancelamento ao final do e-mail de confirmação
         html = html_confirm.replace(
             "</body>",

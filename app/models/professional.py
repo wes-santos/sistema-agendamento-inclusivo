@@ -19,7 +19,7 @@ class Professional(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         unique=True,
         index=True,
-        nullable=False,
+        nullable=True,
     )
 
     created_at: Mapped[dt.datetime] = mapped_column(

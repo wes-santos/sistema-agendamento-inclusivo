@@ -6,8 +6,21 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String
 from sqlalchemy.dialects.postgresql import INET
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import String as SQLString, TypeDecorator
 
 from app.db.base_class import Base
+
+
+class PortableINET(TypeDecorator):
+    """Render PostgreSQL INET while keeping SQLite compatible."""
+
+    impl = SQLString(45)
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(INET())
+        return dialect.type_descriptor(SQLString(45))
 
 
 class AuditLog(Base):
@@ -31,6 +44,6 @@ class AuditLog(Base):
     timestamp_utc: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
-    ip: Mapped[str | None] = mapped_column(INET)
+    ip: Mapped[str | None] = mapped_column(PortableINET())
 
     user = relationship("User")
