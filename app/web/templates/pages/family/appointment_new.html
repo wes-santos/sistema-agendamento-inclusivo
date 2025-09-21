@@ -116,15 +116,39 @@
 
 {# Confirmation Modal #}
 {% call modal(id="confirm-modal", title="Confirmar agendamento") %}
-<div id="appointment-details">
-  <p>Confirme os detalhes do agendamento:</p>
-  <ul>
-    <li><strong>Aluno:</strong> <span id="confirm-student"></span></li>
-    <li><strong>Profissional:</strong> <span id="confirm-professional"></span></li>
-    <li><strong>Data:</strong> <span id="confirm-date"></span></li>
-    <li><strong>Horário:</strong> <span id="confirm-time"></span></li>
-    <li><strong>Local:</strong> <span id="confirm-location"></span></li>
-  </ul>
+<div id="appointment-details" class="appointment-details">
+  <p class="text-center">Confirme os detalhes do agendamento:</p>
+  
+  <div class="appointment-card">
+    <div class="appointment-field">
+      <span class="field-label">Aluno:</span>
+      <span id="confirm-student" class="field-value"></span>
+    </div>
+    
+    <div class="appointment-field">
+      <span class="field-label">Profissional:</span>
+      <span id="confirm-professional" class="field-value"></span>
+    </div>
+    
+    <div class="appointment-field">
+      <span class="field-label">Data:</span>
+      <span id="confirm-date" class="field-value"></span>
+    </div>
+    
+    <div class="appointment-field">
+      <span class="field-label">Horário:</span>
+      <span id="confirm-time" class="field-value"></span>
+    </div>
+    
+    <div class="appointment-field">
+      <span class="field-label">Local:</span>
+      <span id="confirm-location" class="field-value"></span>
+    </div>
+  </div>
+  
+  <div class="modal-actions text-center">
+    <p class="text-muted text-small">Ao confirmar, você estará agendando o atendimento acima.</p>
+  </div>
 </div>
 {% endcall %}
 

@@ -943,6 +943,7 @@ def _send_appointment_booking_email(db: Session, appointment: Appointment, guard
     from app.services.mailer import send_email
     from app.models.student import Student
     from app.models.professional import Professional
+    from app.services.appointment_notify import create_tokens_for_appointment, _make_link
     from zoneinfo import ZoneInfo
     from datetime import datetime
     
@@ -957,29 +958,46 @@ def _send_appointment_booking_email(db: Session, appointment: Appointment, guard
     tz = ZoneInfo("America/Sao_Paulo")
     starts_local = appointment.starts_at.astimezone(tz).strftime("%d/%m/%Y %H:%M")
     
-    # Prepare email context
-    ctx = {
+    # Create tokens for confirmation and cancellation
+    confirm_token, cancel_token = create_tokens_for_appointment(db, appointment, guardian_user.email)
+    confirm_url = _make_link(f"/public/appointments/confirm/{confirm_token}")
+    cancel_url = _make_link(f"/public/appointments/cancel/{cancel_token}")
+    
+    # Prepare email context for family
+    family_ctx = {
         "guardian_name": guardian_user.name,
         "student_name": student.name,
         "professional_name": professional.name,
         "service_name": appointment.service,
         "starts_local": starts_local,
         "location": appointment.location or "Não especificado",
+        "confirm_url": confirm_url,
+        "cancel_url": cancel_url,
     }
     
-    # Render email template
-    html = render_email("appointment_booking.html").render(ctx)
-    subject = f"[SAI] Agendamento realizado - {starts_local}"
-    
-    # Send email to guardian
+    # Send email to guardian (family)
     try:
-        send_email(subject, [guardian_user.email], html, text=None)
+        family_html = render_email("appointment_booking_family.html").render(family_ctx)
+        family_subject = f"[SAI] Agendamento realizado - {starts_local}"
+        send_email(family_subject, [guardian_user.email], family_html, text=None)
     except Exception as e:
         print(f"Failed to send email to guardian: {e}")
     
-    # Send email to professional if they have an email
+    # Prepare email context for professional
+    professional_ctx = {
+        "professional_name": professional.name,
+        "guardian_name": guardian_user.name,
+        "student_name": student.name,
+        "service_name": appointment.service,
+        "starts_local": starts_local,
+        "location": appointment.location or "Não especificado",
+    }
+    
+    # Send email to professional
     if hasattr(professional, 'user') and professional.user and professional.user.email:
         try:
-            send_email(subject, [professional.user.email], html, text=None)
+            professional_html = render_email("appointment_booking_professional.html").render(professional_ctx)
+            professional_subject = f"[SAI] Novo agendamento - {starts_local}"
+            send_email(professional_subject, [professional.user.email], professional_html, text=None)
         except Exception as e:
             print(f"Failed to send email to professional: {e}")

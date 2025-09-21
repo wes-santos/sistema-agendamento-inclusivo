@@ -15,7 +15,17 @@
       <li><strong>Local:</strong> {{ location }}</li>
     </ul>
     
-    <p>Se você precisar cancelar ou alterar este agendamento, entre em contato com a secretaria.</p>
+    <p>Você pode gerenciar seu agendamento usando os links abaixo:</p>
+    <p>
+      <a href="{{ confirm_url }}" style="background:#155EEF;color:white;padding:10px 16px;text-decoration:none;border-radius:6px;margin-right:10px;display:inline-block;">
+        Confirmar agendamento
+      </a>
+      <a href="{{ cancel_url }}" style="background:#EF4444;color:white;padding:10px 16px;text-decoration:none;border-radius:6px;display:inline-block;">
+        Cancelar agendamento
+      </a>
+    </p>
+    
+    <p style="font-size:12px;color:#666">Se você não solicitou este agendamento, por favor cancele usando o link acima. Os links expiram em 48 horas.</p>
     
     <p style="font-size:12px;color:#666">Este é um e-mail automático. Por favor, não responda.</p>
   </body>
