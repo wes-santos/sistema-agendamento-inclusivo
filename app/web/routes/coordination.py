@@ -423,8 +423,8 @@ def _render_coordination_reports(
     ctx = {
         "current_user": current_user,
         "filters": {
-            "date_from": date_from.isoformat(),
-            "date_to": date_to.isoformat(),
+            "date_from": date_from.strftime("%Y-%m-%d"),  # Formato ISO para campos date do HTML
+            "date_to": date_to.strftime("%Y-%m-%d"),      # Formato ISO para campos date do HTML
             "group_by": group_by,
             "service_id": service_id or "",
             "professional_id": professional_id or "",

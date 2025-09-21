@@ -242,8 +242,8 @@ def ui_family_appointments(
         "appointments": appts,
         "filters": {
             "status": status or "",
-            "date_from": date_from or "",
-            "date_to": date_to or "",
+            "date_from": df.strftime("%Y-%m-%d") if df else "",  # Formato ISO para campos date do HTML
+            "date_to": dt.strftime("%Y-%m-%d") if dt else "",    # Formato ISO para campos date do HTML
             "service_id": service_id or "",
         },
         "services": services,

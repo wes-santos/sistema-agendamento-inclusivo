@@ -272,8 +272,8 @@ def _render_professional_schedule(
         "current_user": current_user,
         "app_version": getattr(settings, "APP_VERSION", "dev"),
         "filters": {
-            "date_from": range_from.isoformat(),
-            "date_to": (range_to.isoformat() if range_to else ""),
+            "date_from": range_from.strftime("%Y-%m-%d"),  # Formato ISO para campos date do HTML
+            "date_to": (range_to.strftime("%Y-%m-%d") if range_to else ""),
             "view": view,
             "service_id": filters.get("service_id", ""),
         },
@@ -550,8 +550,8 @@ def _render_professional_reports(
     ctx = {
         "current_user": current_user,
         "filters": {
-            "date_from": df.isoformat(),
-            "date_to": dt.isoformat(),
+            "date_from": df.strftime("%Y-%m-%d"),  # Formato ISO para campos date do HTML
+            "date_to": dt.strftime("%Y-%m-%d"),    # Formato ISO para campos date do HTML
             "group_by": group_by,
         },
         "kpis": kpis,
