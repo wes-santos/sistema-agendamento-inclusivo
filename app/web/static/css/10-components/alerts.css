@@ -18,9 +18,9 @@
 
 /* Variantes */
 .alert--success {
-  border-color: color-mix(in oklab, var(--success, #16a34a) 45%, #fff);
-  background: color-mix(in oklab, var(--success, #16a34a) 10%, #fff);
-  color: #0f5132;
+  border-color: #bbf7d0;
+  background: #dcfce7;
+  color: #14532d;
 }
 .alert--info {
   border-color: color-mix(in oklab, var(--info, #0ea5e9) 45%, #fff);
