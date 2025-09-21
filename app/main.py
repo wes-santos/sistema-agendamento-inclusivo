@@ -14,7 +14,9 @@ from starlette.middleware.sessions import SessionMiddleware
 from starlette.responses import JSONResponse
 
 import app.db.base
+from app.db import get_db
 from app.api.main import api_router
+from app.api.test_router import test_router
 from app.core.logging import configure_logging, get_logger
 from app.core.security import CSPMiddleware
 from app.core.settings import settings
@@ -23,6 +25,7 @@ from app.middlewares.telemetry import RequestContextMiddleware
 from app.models.user import Role, User
 from app.version import APP_VERSION, BUILD_TIME_UTC, GIT_SHA
 from app.web.routes import auth, coordination, family, professional
+from app.api.v1 import public_appointments
 from app.web.templating import templates
 
 configure_logging(json=True, level="INFO")
@@ -115,14 +118,33 @@ app.add_middleware(
 app.add_middleware(CSPMiddleware)
 
 
+# Include public appointments router directly (no versioning)
+app.include_router(public_appointments.router)
+
 # Include the new API router with version prefix
 app.include_router(api_router)
+
+# Include test router
+app.include_router(test_router)
 
 # Keep existing web UI routers
 app.include_router(family.router)
 app.include_router(professional.router)
 app.include_router(coordination.router)
 app.include_router(auth.router)
+
+
+@app.get("/test-public")
+def test_public():
+    return {"message": "Public route working!"}
+
+
+@app.get("/test-db")
+def test_db(db: Session = Depends(get_db)):
+    # Try to query a simple table to see if DB is working
+    from app.models.appointment_token import AppointmentToken
+    count = db.query(AppointmentToken).count()
+    return {"message": "DB working", "token_count": count}
 
 
 # --- Endpoints

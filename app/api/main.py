@@ -9,7 +9,6 @@ from app.api.v1 import (
     dashboard_family,
     dashboard_professional,
     professionals,
-    public_appointments,
     slots,
     students,
 )
@@ -22,6 +21,5 @@ api_router.include_router(dashboard_coordination.router)
 api_router.include_router(dashboard_family.router)
 api_router.include_router(dashboard_professional.router)
 api_router.include_router(professionals.router)
-api_router.include_router(public_appointments.router)
 api_router.include_router(slots.router)
 api_router.include_router(students.router)

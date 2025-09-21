@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Annotated, Any
 from urllib.parse import urlencode
@@ -18,6 +19,10 @@ from app.models.student import Student
 from app.models.user import Role, User
 from app.schemas.dashboard_family import StudentApptItem, StudentApptSummary
 from app.web.templating import render
+from app.services.appointment_notify import (
+    _make_link,
+    create_tokens_for_appointment,
+)
 
 router = APIRouter()
 
@@ -485,14 +490,27 @@ def ui_family_create_appointment(
             ends_at=end_datetime_utc,
             status=AppointmentStatus.SCHEDULED,
         )
-        
+
         db.add(appointment)
+        db.flush()
+
+        confirm_token = cancel_token = None
+        confirm_token, cancel_token = create_tokens_for_appointment(
+            db, appointment, current_user.email
+        )
+
         db.commit()
         db.refresh(appointment)
-        
+
         # Send confirmation email
         try:
-            _send_appointment_booking_email(db, appointment, current_user)
+            _send_appointment_booking_email(
+                db,
+                appointment,
+                current_user,
+                confirm_token=confirm_token,
+                cancel_token=cancel_token,
+            )
         except Exception as email_error:
             # Log the error but don't fail the appointment creation
             print(f"Failed to send appointment booking email: {email_error}")
@@ -937,15 +955,24 @@ def ui_family_appointments(
     )
 
 
-def _send_appointment_booking_email(db: Session, appointment: Appointment, guardian_user: User):
+def _send_appointment_booking_email(
+    db: Session,
+    appointment: Appointment,
+    guardian_user: User,
+    *,
+    confirm_token: uuid.UUID,
+    cancel_token: uuid.UUID,
+):
     """Send appointment booking confirmation email to guardian and professional"""
     from app.email.render import render as render_email
     from app.services.mailer import send_email
     from app.models.student import Student
     from app.models.professional import Professional
-    from app.services.appointment_notify import create_tokens_for_appointment, _make_link
     from zoneinfo import ZoneInfo
-    from datetime import datetime
+
+    if not confirm_token or not cancel_token:
+        print("Missing confirmation/cancellation tokens; skipping email notification.")
+        return
     
     # Get related objects
     student = db.query(Student).filter(Student.id == appointment.student_id).first()
@@ -958,8 +985,6 @@ def _send_appointment_booking_email(db: Session, appointment: Appointment, guard
     tz = ZoneInfo("America/Sao_Paulo")
     starts_local = appointment.starts_at.astimezone(tz).strftime("%d/%m/%Y %H:%M")
     
-    # Create tokens for confirmation and cancellation
-    confirm_token, cancel_token = create_tokens_for_appointment(db, appointment, guardian_user.email)
     confirm_url = _make_link(f"/public/appointments/confirm/{confirm_token}")
     cancel_url = _make_link(f"/public/appointments/cancel/{cancel_token}")
     
